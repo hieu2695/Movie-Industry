@@ -1,0 +1,717 @@
+---
+title: "Project 2"
+author: "Le Tran Hieu"
+date: "11/23/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE,warning=F, message=F}
+knitr::opts_chunk$set(collapse = T, results = 'hide', warning = F, message = F, error = F)
+options(scientific=T, digits = 3) 
+# options(scipen=9, digits = 3) 
+
+```
+
+```{r loadPkgfcn}
+loadPkg = function(x) { if (!require(x,character.only=T, quietly =T)) { install.packages(x,dep=T,repos="http://cran.us.r-project.org"); if(!require(x,character.only=T)) stop("Package not found") } }
+```
+
+
+```{r load}
+
+loadPkg("randomForest")
+loadPkg("DMwR")
+loadPkg("ggplot2")
+loadPkg("Metrics")
+loadPkg("FNN")
+loadPkg("leaps")
+#loadPkg("ISLR")
+
+
+```
+
+
+## Preprocess data
+
+### Import data
+
+```{r Q1}
+#read file 
+df <- read.csv("Movie.csv")
+
+```
+
+### Remove NAs and dups
+
+```{r Q2}
+
+#remove na
+movie = na.omit(df)
+
+#remove duplicates
+movie <- unique(movie)
+
+#remove movies without budget or revenue or no genre or no vote or no score 
+movie <- subset(movie, !((movie$budget == 0) | (movie$revenue == 0) | (movie$Number_Genres == 0) | (movie$vote_count == 0) 
+                         | (movie$vote_average == 0) ))
+
+```
+
+
+### Process columns
+
+```{r Q3}
+#renames columns
+
+
+colnames(movie)[c(5,6,10,11,12)] = c("company","date","score","vote","genrecount")
+
+row.names(movie) <- NULL #reorder row names
+```
+
+### Create columns
+
+```{r Q4}
+
+movie$profit = movie$revenue - movie$budget # create profit column
+
+#movie$roi = (movie$profit)*100/(movie$budget) # create ROI column
+
+movie$profitable <- c(0) #create profitable column indicating whether a movie has negative or posite profit
+
+for (i in 1:nrow(movie)) {if (movie[i,"profit"] > 0) {movie[i,"profitable"] = 1} } #positive profit is applied as 1, negative is 0
+
+movie$profitable = as.factor(movie$profitable) #make sure the profitable outputs are factors
+
+
+
+```
+
+### Refactor
+
+```{r Q5}
+movie$genres <- factor(movie$genres)
+
+movie$title <- factor(movie$title)
+
+movie$date <- factor(movie$date)
+
+str(movie)
+```
+
+
+
+### Company
+
+```{r Q6}
+movie$company = as.character(movie$company)  #change company to character for easy function
+
+# Below is the list of studios in 5 largest parent studios in the world. 
+# I collect information from wiki and some websites. Although the lists may lack some minor studios, they include most of popular ones.
+
+warner = c("Warner Bros.", "Warner Bros. Pictures", "Warner Bros. Animation", "Warner Bros. Family Entertainment", "Warner Brothers/Seven Arts",  "New Line Cinema", "DC Comics","Castle Rock Entertainment")
+
+universal = c("Universal","Universal Pictures", "Universal Pictures Corporation", "Universal Studios", "DreamWorks", "DreamWorks Animation", "DreamWorks SKG", "Amblin Entertainment", "Working Title Films", "Focus Features", "Focus Films","Gramercy Pictures")
+
+paramount = c("Paramount Pictures", "Paramount", "Paramount Classics", "Paramount Vantage","MTV Films","Nickelodeon Movies")
+
+walt_disney = c("Walt Disney", "Walt Disney Animation Studios", "Walt Disney Pictures", "Walt Disney Productions", "Walt Disney Studios Motion Pictures", "Walt Disney Television Animation", "Buena Vista", "Touchstone Pictures", "Hollywood Pictures", "Caravan Pictures","Miramax","Miramax Films","Dimension Films","Marvel Studios", "Twentieth Century Fox Film Corporation", "Blue Sky Studios","Lucasfilm","Fox 2000 Pictures", "Fox Atomic","Fox Entertainment Group","Fox Searchlight Pictures","UTV Motion Pictures")
+
+sony = c("Columbia Pictures","Columbia Pictures Corporation", "Columnbia Pictures Industries", "Sony Pictures", "Sony Pictures Animation", "Sony Pictures Classics", "TriStar Pictures","Destination Films") 
+
+#other film companies will be saved into "Other" group
+
+```
+
+
+
+```{r Q7}
+
+for (i in 1:nrow(movie)) {
+  if (movie[i,"company"]%in%warner) {movie[i,"company"] = "Warner Bros"}
+  
+  else if(movie[i,"company"]%in%universal) {movie[i,"company"] = "Universal Pictures"}
+  
+  else if(movie[i,"company"]%in%paramount) {movie[i,"company"] = "Paramount Pictures"}
+  
+  else if(movie[i,"company"]%in%walt_disney) {movie[i,"company"] = "Walt Disney"}
+  
+  else if(movie[i,"company"]%in%sony) {movie[i,"company"] = "Sony Pictures"}
+  
+  else (movie[i,"company"] = "Others")
+  
+} 
+
+movie$company = as.factor(movie$company) #change company back to factors
+
+
+```
+
+
+```{r Q8}
+comp_count = data.frame(table(movie$company))
+
+
+ggplot(comp_count, aes(x = reorder(Var1, Freq), y = Freq)) + 
+  geom_bar(stat = 'identity', fill ='blue', alpha = 0.7) + coord_flip() +
+  ylab("Number of movies") +
+  xlab("Studios") +
+  ggtitle(("Number of movies by Studios")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+```
+
+
+### Structure of movie data
+
+
+
+```{r Q9}
+
+movie <- movie[-c(1,12)]
+
+str(movie)
+```
+
+```{r test}
+
+
+#fit <- lm(revenue~.,data=movie[-c(5,8,12,13)])
+#summary(fit)
+
+
+
+```
+
+
+## Model
+
+### Correlation matrix
+
+```{r Q10}
+
+loadPkg("corrplot")
+
+movie_num <- subset(movie, select = c(6,1,3,7,9,10))
+
+cordf =  cor(movie_num)
+
+corrplot(cordf)
+
+
+
+```
+
+```{r str}
+
+str(movie_num)
+
+```
+
+
+## Split train and test sets
+
+```{r Q10}
+
+#scale the data
+
+scale_movie <- as.data.frame(scale(movie_num[c(2:6)], center = TRUE, scale = TRUE))
+
+
+
+
+```
+
+### Split
+
+```{r Q11}
+
+
+set.seed(1000)
+
+movie_sample <- sample(2, nrow(scale_movie), replace=TRUE, prob=c(0.67, 0.33))
+
+```
+
+### Train and test
+
+```{r Q12}
+xtrain1 <- scale_movie[movie_sample==1, 1:5]
+
+
+xtest1 <- scale_movie[movie_sample==2, 1:5]
+
+
+
+ytrain1 <- movie_num[movie_sample==1, 1]
+
+ytest1 <- movie_num[movie_sample==2, 1]
+
+
+train1 <- as.data.frame(cbind(revenue = ytrain1,xtrain1))
+test1 <- as.data.frame(cbind(revenue = ytest1,xtest1))
+
+```
+
+### MLR model
+
+Train:
+
+```{r Q13}
+
+loadPkg("faraway")
+rev_lm1 <- lm(revenue ~., data = train1)
+summary(rev_lm1)
+
+vif(rev_lm1)
+
+
+```
+
+Test
+
+```{r Q14}
+
+rev_lm_test1 <- predict(object = rev_lm1, test1)
+
+rev_lm_pred1 <- data.frame(cbind(actuals=test1$revenue, predicteds=rev_lm_test1))
+
+rev_lm_metrics1 <- regr.eval(rev_lm_pred1$actuals, rev_lm_pred1$predicteds)
+
+rev_lm_metrics1
+
+
+rev_lm_train1 <- predict(object = rev_lm1, train1)
+
+rev_lm_predtrain1 <- data.frame(cbind(actuals=train1$revenue, predicteds=rev_lm_train1))
+
+rev_lm_metrics_train1 <- regr.eval(rev_lm_predtrain1$actuals, rev_lm_predtrain1$predicteds)
+
+rev_lm_metrics_train1
+
+
+```
+
+
+
+Feature selection
+
+```{r Q15}
+
+reg.lm <- regsubsets(revenue~., data = train1, nbest = 1, method = "exhaustive")  # leaps, exhaustive method
+plot(reg.lm, scale = "adjr2", main = "Adjusted R^2")
+plot(reg.lm, scale = "bic", main = "BIC") 
+plot(reg.lm, scale = "Cp", main = "Cp")
+
+#summary(reg.lm)
+
+```
+
+
+
+
+
+budget + popularity + vote 
+
+## 2 predictors
+
+
+```{r Q16}
+
+
+rev_lm2 <- lm(revenue ~ budget + popularity + vote, data = train1)
+summary(rev_lm2)
+
+vif(rev_lm2)
+
+```
+
+Test
+
+```{r Q17}
+
+rev_lm_test2 <- predict(object = rev_lm2, test1)
+
+rev_lm_pred2 <- data.frame(cbind(actuals=test1$revenue, predicteds=rev_lm_test1))
+
+rev_lm_metrics2 <- regr.eval(rev_lm_pred2$actuals, rev_lm_pred2$predicteds)
+
+rev_lm_metrics2
+
+
+rev_lm_train2 <- predict(object = rev_lm2, train1)
+
+rev_lm_predtrain2 <- data.frame(cbind(actuals=train1$revenue, predicteds=rev_lm_train1))
+
+rev_lm_metrics_train2 <- regr.eval(rev_lm_predtrain2$actuals, rev_lm_predtrain2$predicteds)
+
+rev_lm_metrics_train2
+
+```
+
+
+
+## PCR
+
+```{r PCA_PCR_xform_fcns}
+
+PCAxform <- function(df, z=TRUE) { 
+  #' Obtain the dataframe with the Principal Components after the rotation. 
+  #' ELo 201903 GWU DATS
+  #' @param df The dataframe.
+  #' @param z T/F or 0/1 for z-score to be used
+  #' @return The transformed dataframe.
+  #' @examples
+  #' tmp = PCAxform(USArrests,TRUE)
+
+  z = ifelse(z==TRUE || z=="true" || z=="True" || z=="T" || z=="t" || z==1 || z=="1", TRUE, FALSE) # standardize z 
+  if(z) { df = data.frame(scale(df))}  # scale not safe for non-numeric colunms, but PCA requires all variables numerics to begin with.
+  nmax = length(df)
+  pr.out = prcomp(df,scale=z)
+  df1 = data.frame()
+  cnames = c()
+  for( i in 1:nmax ) {
+    vec = 0
+    cnames = c( cnames, paste("PC",i, sep="") )
+    for( j in 1:nmax ) { vec = vec + pr.out$rotation[j,i]*df[,j] }
+    if( length(df1)>0 ) { df1 = data.frame(df1,vec) } else { df1 = data.frame(vec) }
+    }
+  colnames(df1) <- cnames
+  return(df1)
+}
+
+
+# To-be-implemented: for z=TRUE, it will be better to have the z-scaling option for x-vars and y separately. It is actually convenient keep y in original units.
+PCRxform <- function(df, y, zX=TRUE, zy=FALSE) { 
+  #' Obtain the dataframe with the Principal Components after the rotation for PCRegression. Requires related function PCAxform()
+  #' ELo 201903 GWU DATS
+  #' @param df The dataframe.
+  #' @param y The y-variable column index number(int), or the name of y-variable
+  #' @param zX T/F or 0/1 for z-score used on X-variables
+  #' @param zy T/F or 0/1 for z-score used on the target y-variable
+  #' @return The transformed dataframe.
+  #' @examples
+ 
+
+  # take care of y target
+  zy = ifelse(zy==TRUE || zy=="true" || zy=="True" || zy=="T" || zy=="t" || zy==1 || zy=="1", TRUE, FALSE) # standardize target y
+  if( is.integer(y) ) { # y is integer
+    if( y>length(df) || y<1 ) {
+      print("Invalid column number")
+      return(NULL)
+    }
+    if(zy) { df1 = data.frame( scale(df[y]) ) } else { df1 = df[y] } # save y-var in df1
+    df = df[-y] # remove y-variable in df
+  } else { # y is not integer, so interpret as name
+    if(zy) { df1 = data.frame( scale( df[names(df) == y] ) ) } else { df1 = df[names(df) == y] }
+    df = df[names(df) != y] # remove y-variable in df
+  }
+  if( length(df1)<1 ) {
+    print("Variable name not found in data.frame")
+    return(NULL)
+  }
+  # now transform X-vars
+  zX = ifelse(zX==TRUE || zX=="true" || zX=="True" || zX=="T" || zX=="t" || zX==1 || zX=="1", TRUE, FALSE) # standardize X-vars 
+  df2 = PCAxform(df,zX)
+  df1 = data.frame(df1,df2) # piece them back together
+  return(df1)
+}
+
+```
+
+
+
+
+
+### PCR
+
+```{r Q18}
+loadPkg("pls")
+loadPkg("mice")
+#loadPkg("ISLR")
+
+
+```
+
+
+###Check variance
+
+```{r Q19}
+
+
+
+pr = prcomp(movie_num[c(2:6)] , scale =FALSE)
+pr_scale = prcomp(movie_num[c(2:6)], scale =TRUE)
+
+
+summary(pr)
+#pr$rotation
+summary(pr_scale)
+#pr_scale$rotation
+
+```
+
+
+```{r Q20}
+
+pr.var <- (pr$sdev^2)
+pve <- pr.var/sum(pr.var)
+plot(cumsum(pve), xlab="Principal Component (standardized)", ylab ="Cumulative Proportion of Variance Explained",ylim=c(0,1),type="b")
+pr_scale.var <- (pr_scale$sdev^2)
+pve_scale  <- pr_scale.var/sum(pr_scale.var)
+plot(cumsum(pve_scale), xlab="Principal Component (non-standardized)", ylab ="Cumulative Proportion of Variance Explained",ylim=c(0,1),type="b")
+
+
+```
+
+
+
+###Scale data
+
+```{r Q21}
+
+#train2 = as.data.frame(cbind(xtrain1, revenue = movie_rest_train1$revenue))
+
+#test2 = as.data.frame(cbind(xtest1, revenue = movie_rest_test1$revenue))
+
+movie_pcr = PCRxform(train1[c(1:6)],"revenue",TRUE,FALSE) 
+movie_pcr
+
+movie_pcr.nc = PCRxform(train1[c(1:6)],"revenue",FALSE, FALSE) 
+movie_pcr.nc
+
+```
+
+
+
+
+
+```{r Q23}
+pcr.fit <- pcr(revenue~.,data=movie_pcr,scale=FALSE,validation="CV")
+validationplot(pcr.fit,val.type="MSEP", legend="topright")
+validationplot(pcr.fit,val.type="R2", legend="topright")
+summary(pcr.fit)
+
+pcr.fit.nc <- pcr(revenue~.,data=movie_pcr.nc,scale=FALSE,validation="CV")
+validationplot(pcr.fit.nc,val.type="MSEP", legend="topright")
+validationplot(pcr.fit.nc,val.type="R2", legend="topright")
+summary(pcr.fit.nc)
+
+
+pr$rotation
+pr_scale$rotation
+
+```
+
+
+
+
+```{r Q24}
+
+pcr_lm1 <- lm(revenue~., data = movie_pcr)
+summary(pcr_lm1)
+vif(pcr_lm1)
+
+
+
+pcr_lm2 <- lm(revenue~., data = movie_pcr.nc)
+summary(pcr_lm2)
+vif(pcr_lm2)
+
+
+pcr_lm3 <- lm(revenue~.,data = movie_num[movie_sample==1,1:6])
+summary(pcr_lm3)
+vif(pcr_lm3)
+
+
+```
+
+Feature Selection
+
+
+```{r Q25}
+
+#reg.pcr.lm <- regsubsets(revenue~., data = movie_num[movie_sample==1, 1:6], nbest = 1, method = "exhaustive")  # leaps, exhaustive method
+#plot(reg.pcr.lm, scale = "adjr2", main = "Adjusted R^2")
+#plot(reg.pcr.lm, scale = "bic", main = "BIC") 
+#plot(reg.pcr.lm, scale = "Cp", main = "Cp")
+
+```
+
+
+```{r Q26}
+
+pcr_lm4 <- lm(revenue ~ PC1 + PC2 , data = movie_pcr)
+summary(pcr_lm4)
+vif(pcr_lm4)
+
+
+
+pcr_lm5 <- lm(revenue ~ PC1 + PC2 , data = movie_pcr.nc)
+summary(pcr_lm5)
+vif(pcr_lm5)
+
+
+
+```
+
+
+### Validation
+
+```{r Q26}
+AIC(object = pcr_lm4, k = 2)
+BIC(object = pcr_lm4)
+
+AIC(object = pcr_lm5, k = 2)
+BIC(object = pcr_lm5)
+
+
+str(movie)
+
+
+```
+
+
+## Logit
+
+
+
+```{r Q27}
+
+contable1 <- table(movie$genres, movie$profitable)
+chisqres1 = chisq.test(contable1)
+chisqres1
+
+
+contable2 <- table(movie$company, movie$profitable)
+chisqres2 = chisq.test(contable2)
+chisqres2
+
+
+
+
+```
+
+
+```{r Q28}
+
+movie_scale <- as.data.frame(scale(movie_num[c(1:6)], center = TRUE, scale = TRUE))
+movie_scale$genres = movie$genres
+movie_scale$company = movie$company
+movie_scale$y = movie$profitable
+
+movie_scale <- subset(movie_scale, !(movie_scale$genres == "Foreign"))
+movie_scale$genres <- as.factor(as.character(movie_scale$genres))
+
+
+set.seed(1)
+movie_sample1 <- sample(2, nrow(movie_scale), replace=TRUE, prob=c(0.50, 0.50))
+
+
+train2 <- movie_scale[movie_sample1==1, 1:9]
+test2 <- movie_scale[movie_sample1==2, 1:9]
+
+
+
+```
+
+
+
+```{r Q29, warning=F, message=F}
+
+#drop revenue
+loadPkg("bestglm")
+res.bestglm <- bestglm(Xy = train2[-c(1)], family = binomial,
+            IC = "AIC",                 # Information criteria for
+            method = "exhaustive")
+#summary(res.bestglm)
+res.bestglm$BestModels
+#summary(res.bestglm$BestModels)
+
+
+#drop budget
+res.bestglm1 <- bestglm(Xy = train2[-c(2)], family = binomial,
+            IC = "AIC",                 # Information criteria for
+            method = "exhaustive")
+#summary(res.bestglm1)
+res.bestglm1$BestModels
+#summary(res.bestglm1$BestModels)
+
+
+```
+
+```{r Q29}
+
+prf_glm <- glm(y ~ genres + revenue + score + runtime, data = train2[-c(2)], family = "binomial")
+summary(prf_glm)
+
+prf_glm1 <- glm(y ~ budget + company + score + vote, data = train2[-c(1)], family = "binomial")
+summary(prf_glm1)
+
+
+```
+
+
+```{r Q30}
+
+#glm_pred <- predict(object = prf_glm, test2)
+
+#actual_pred_glm <- as.data.frame(cbind(actuals = test2$y, predicts = glm_pred))
+
+
+loadPkg("pROC") 
+
+prob_glm = predict(object = prf_glm, train2, type = c("response"))
+h <- roc(y~prob_glm, data=train2)
+auc(h) # area-under-curve prefer 0.8 or higher.
+plot(h)
+title("Training")
+
+
+
+prob_glm1 = predict(object = prf_glm, test2, type = c("response"))
+h1 <- roc(y~prob_glm1, data=test2)
+auc(h1) # area-under-curve prefer 0.8 or higher.
+plot(h1)
+title("Testing")
+
+```
+
+
+```{r Q44}
+
+newdata3 <- with(test2, data.frame(revenue = mean(revenue), score = mean(score), runtime=mean(runtime), genres = genrelist))
+newdata3$rankP <- predict(prf_glm, newdata = newdata3, type = "response")
+newdata3
+
+
+```
+
+
+```{r Q31}
+
+#test2$genres <- as.factor(as.character(test2$genres))
+companylist = unique(test2$company)
+
+newdata1 <- with(test2, data.frame(revenue = rep(seq(from = -0.0111, to = 0.0, length.out = 100), 18), score = mean(score), runtime=mean(runtime), genres = rep(genrelist, each =100)))
+
+
+newdata2 <- cbind(newdata1, predict(prf_glm, newdata = newdata1, type = "link", se = TRUE))
+newdata2 <- within(newdata2, {
+   PredictedProb <- plogis(fit)
+   LL <- plogis(fit - (1.96 * se.fit))
+   UL <- plogis(fit + (1.96 * se.fit))
+})
+
+head(newdata2)
+
+
+```
+
+
+```{r Q31}
+ggplot(newdata2, aes(x = revenue, y = PredictedProb)) + geom_ribbon(aes(ymin = LL,
+    ymax = UL, fill = genres), alpha = 0.2) + geom_line(aes(colour = genres),
+    size = 1)
+```
