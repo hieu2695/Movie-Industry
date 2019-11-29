@@ -1,15 +1,21 @@
 ---
-title: "Project 2"
-author: "Le Tran Hieu"
-date: "11/23/2019"
-output: html_document
+title: "DATS 6101 - Final Project"
+author: "Randomly-Generated: Tran Hieu Le, Fahim Ishrak, Zhilin Wang, Totyana Hill"
+date: "11/05/2019"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '4'
 ---
 
 
 
-
 ```{r setup}
-knitr::opts_chunk$set(echo = F, include = T,warning=F, message=F)
+knitr::opts_chunk$set(echo = F, include = F, warning=F, message=F)
 options(scientific=T, digits = 3) 
 # options(scipen=9, digits = 3) 
 
@@ -20,33 +26,36 @@ loadPkg = function(x) { if (!require(x,character.only=T, quietly =T)) { install.
 ```
 
 
-```{r load}
+```{r loadsomepackage}
 
+#load some packages that will be used
 loadPkg("randomForest")
 loadPkg("DMwR")
 loadPkg("ggplot2")
 loadPkg("Metrics")
 loadPkg("FNN")
 loadPkg("leaps")
-#loadPkg("ISLR")
+
 
 
 ```
 
-
-# Preprocess data
+#
+# Preparation
 
 At first, we preprocessed the raw data in Python to obtain a nicer data frame (as in the raw data, some columns are written in JSON format).
 
-### Import data
+## Import data
 
 ```{r Q1}
-#read file 
+
+# read csv file 
 df <- read.csv("Movie.csv")
+str(df) # have an initial glance at the data
 
 ```
 
-### Remove NAs and dups
+## Remove missing values
 
 ```{r Q2}
 
@@ -56,7 +65,8 @@ movie = na.omit(df)
 #remove duplicates
 movie <- unique(movie)
 
-#remove movies without budget or revenue or no genre or no vote or no score 
+#remove movies wiht no budget, no revenue, no genre, no vote, no score 
+#we can use predict function with some models to fill the missing values but there are not many missing values so we just remove them
 movie <- subset(movie, !((movie$budget == 0) | (movie$revenue == 0) | (movie$Number_Genres == 0) | (movie$vote_count == 0) 
                          | (movie$vote_average == 0) ))
 
@@ -415,7 +425,7 @@ rev_lm_metrics1 # show the metrics
 
 
 # predict the model on train set
-rev_lm_train1 <- predict(object = rev_lm1, train1)
+rev_lm_train1 <- predict(object = rev_lm1, newdata =train1)
 rev_lm_predtrain1 <- data.frame(cbind(actuals=train1$revenue, predicteds=rev_lm_train1))
 rev_lm_metrics_train1 <- regr.eval(rev_lm_predtrain1$actuals, rev_lm_predtrain1$predicteds)
 rev_lm_metrics_train1
@@ -462,13 +472,17 @@ Predict model on Test set
 rev_lm_test2 <- predict(object = rev_lm2, test1) # prediction on test set
 rev_lm_pred2 <- data.frame(cbind(actuals=test1$revenue, predicteds=rev_lm_test1)) 
 rev_lm_metrics2 <- regr.eval(rev_lm_pred2$actuals, rev_lm_pred2$predicteds) # metrics
-rev_lm_metrics2
+#rev_lm_metrics2
 
 
-rev_lm_train2 <- predict(object = rev_lm2, train1) # prediction on train set
+rev_lm_train2 <- predict(object = rev_lm2, newdata = train1) # prediction on train set
 rev_lm_predtrain2 <- data.frame(cbind(actuals=train1$revenue, predicteds=rev_lm_train1))
 rev_lm_metrics_train2 <- regr.eval(rev_lm_predtrain2$actuals, rev_lm_predtrain2$predicteds) # metrics
-rev_lm_metrics_train2
+
+rev_lm2$fitted.values[1:10]
+rev_lm_train2[1:10]
+predict(rev_lm2)[1:10]
+#rev_lm_metrics_train2
 
 ```
 
@@ -532,7 +546,7 @@ vif(rev_lm3)
 
 ```
 
-The adj R-squared increases by 1% comparing to the the best model with numerical variables.
+The adj R-squared increases by 0.4% comparing to the the best model with numerical variables.
 
 Prediction
 
@@ -1525,13 +1539,20 @@ metrics_train_tree
 
 ```{r sagfrtfsmdgfmg}
 set.seed(123)
-rev_rf = randomForest(revenue~., data = train1_full, mtry = sqrt(8), ntree = 350, importance = TRUE)
+rev_rf = randomForest(revenue~. , train1_full, ntree = 350)
 
 rev_rf 
 randomForest::importance(rev_rf)
 
 ```
  
+
+```{r sadfsadfttt}
+
+plot(rev_rf)
+rev_rf$mse[350]
+
+```
 
 
 
@@ -1543,10 +1564,14 @@ metrics_test_rf  <- regr.eval(actual_pred_rf.test$actuals, actual_pred_rf.test$p
 metrics_test_rf
 
 
-rev_rf.train <- predict(rev_rf, train1_full)
+rev_rf.train <- predict(rev_rf)
 actual_pred_rf.train <- as.data.frame(cbind(actuals = train1_full$revenue, predicteds = rev_rf.train))
 metrics_train_rf <- regr.eval(actual_pred_rf.train$actuals, actual_pred_rf.train$predicteds)
 metrics_train_rf
+
+predict(rev_rf)[1:10]
+predict(rev_rf, train1_full)[1:10]
+rev_rf$predicted[1:10]
 
 
 ```
