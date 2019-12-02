@@ -1,1 +1,3 @@
-# DATS-6101---Final-Project
+# DATS6101 Final Project
+# Modeling
+# Topic: Movie Industry
