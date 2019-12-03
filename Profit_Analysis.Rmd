@@ -258,14 +258,17 @@ loadPkg("leaps")
 loadPkg("ISLR")
 #This is essentially best fit 
 movie_reg$month <- as.factor(movie_reg$month)
-reg.best <- regsubsets(profit~. , data = movie_reg, nvmax = 14, nbest = 1, method = "backward")  # leaps, regsubsets: Model selection by exhaustive search, forward or backward stepwise, or sequential replacement
-#The plot will show the Adjust R^2 when using the variables across the bottom
+movie_reg <- subset(movie_reg,select = -c(M2,M3,M4,M5,M6,M7,M8,M9,M10,M11,M12))
+```
+
+```{r modelselection}
+reg.best <- regsubsets(profit~. , data = movie_reg, nvmax = 14, nbest = 1, method = "backward")
 plot(reg.best, scale = "adjr2", main = "Adjusted R^2")
 plot(reg.best, scale = "r2", main = "R^2")
 # In the "leaps" package, we can use scale=c("bic","Cp","adjr2","r2")
 plot(reg.best, scale = "bic", main = "BIC")
 plot(reg.best, scale = "Cp", main = "Cp")
-# summary(reg.best)
+summary(reg.best)
 ```
 
 ```{r, warning=F, echo=F}
@@ -278,7 +281,7 @@ res.legend <- subsets(reg.best, statistic="cp", legend = FALSE , main = "Mallow 
 # this output gives the list of variables and their abbreviations
 ```
 
-According to the plots above, we know that predictors (budget, vote, month5, month6,month12, genre family, and genre animation) form the best model.
+According to the plots above, we know that predictors (budget, vote, month5, month6,month12, genre Animation, and genre family) form the best model.
 
 #### Other linear models
 
@@ -305,7 +308,7 @@ fit <- ridge.mod$lambda
 ```
 
 * The glmnet( ) function creates 141 models, with our choice of 141 $\lambda$ values. Each model coefficients are stored in the object we named: ridge.mod  
-* There are 41 coefficients for each model. The 141 $\lambda$ values are chosen from $10^{-4}$ to $10^{10}$, essentially covering the ordinary least square model ($\lambda$ = 0), and the null/constant 
+* There are 40 coefficients for each model. The 141 $\lambda$ values are chosen from $10^{-4}$ to $10^{10}$, essentially covering the ordinary least square model ($\lambda$ = 0), and the null/constant 
 model ($\lambda$ approach infinity).
 
 
@@ -341,7 +344,7 @@ sqrt(sum(coef(ridge.mod)[-1,60]^2))  # 0.0025
 
 ### Lasso Regression
 
-## Train and test
+#### Train and test
 
 ```{r, include = F}
 loadPkg("dplyr")
@@ -356,7 +359,7 @@ y_train = train %>% select(profit) %>% unlist() # %>% as.numeric()
 y_test = test %>% select(profit) %>% unlist() # %>% as.numeric()
 ```
 
-## Build the model
+#### Build the model
 ```{r}
 lasso.mod=glmnet(x_train,y_train,alpha=1,lambda=lambdas)
 plot(lasso.mod)
@@ -372,9 +375,52 @@ bestlam=cv.out$lambda.min
 lasso.pred=predict(lasso.mod,s=bestlam,newx=x_test)
 mean((lasso.pred-y_test)^2)
 out = glmnet(xr, yr, alpha = 1, lambda = lambdas) # Fit lasso model on full dataset
-lasso_coef = predict(out, type = "coefficients", s = bestlam)[1:41,] # Display coefficients using λ chosen by CV
+lasso_coef = predict(out, type = "coefficients", s = bestlam)[1:40,] # Display coefficients using λ chosen by CV
 lasso_coef
 lasso_coef[lasso_coef!=0]
 lasso_coef[lasso_coef==0]
 ```
 
+
+### Random Forest Regression
+
+```{r}
+str(movies_rf)
+```
+
+```{r rf}
+# Splitting the dataset into the Training set and Test set
+# install.packages('caTools')
+library(caTools)
+set.seed(123)
+split = sample.split(movie_reg$profit, SplitRatio = 0.8)
+training_set = subset(movie_reg, split == TRUE)
+test_set = subset(movie_reg, split == FALSE)
+
+# Fitting Random Forest Regression to the dataset
+# install.packages('randomForest')
+library(randomForest)
+set.seed(1234)
+movies_rf <- subset(movie, select = -c(title,genrecount,date,revenue,roi,profitable))
+
+regressor = randomForest(x = movies_rf[-9],
+                         y = movies_rf$profit,
+                         ntree = 500)
+
+```
+
+```{r prediction}
+summary(regressor)
+# Predicting a new result with Random Forest Regression
+Mulan <- data.frame(company = 'Walt Disney',genre = 'Animation',month = 3, runtime = 100 ,budget = 25000000, popularity = 150, score = 9.4,vote = 4566)
+levels(Mulan$company) <- regressor$forest$xlevels$company
+levels(Mulan$genre) <- regressor$forest$xlevels$genre
+Mulan_profit = predict(regressor, Mulan)
+
+Frozen2 <- data.frame(company = 'Walt Disney',genre = 'Animation',month = 11, runtime = 104 ,budget = 33000000, popularity = 150, score = 4.58,vote = 29223)
+levels(Frozen2$company) <- regressor$forest$xlevels$company
+levels(Frozen2$genre) <- regressor$forest$xlevels$genre
+Frozen2_profit = predict(regressor, Frozen2)
+#651000000
+#521197933 
+```
