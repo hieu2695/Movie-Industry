@@ -1,0 +1,380 @@
+---
+title: "Project 2"
+author: "Zhilin Wang"
+date: "11/23/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F,warning = F, results = F, message = F)
+options(scientific=T, digits = 3) 
+# options(scipen=9, digits = 3) 
+
+```
+
+```{r loadPkgfcn}
+loadPkg = function(x) { if (!require(x,character.only=T, quietly =T)) { install.packages(x,dep=T,repos="http://cran.us.r-project.org"); if(!require(x,character.only=T)) stop("Package not found") } }
+```
+
+
+```{r load}
+
+loadPkg("randomForest")
+loadPkg("DMwR")
+loadPkg("ggplot2")
+loadPkg("corrplot")
+loadPkg("Metrics")
+
+
+```
+
+
+## Preprocess data
+
+### Import data
+
+```{r Q1}
+#read file 
+df <- read.csv("Movie.csv")
+
+```
+
+### Remove NAs and dups
+
+```{r Q2}
+
+#remove na
+movie = na.omit(df)
+
+#remove duplicates
+movie <- unique(movie)
+
+#remove movies without budget or revenue or no genre or no vote or no score 
+movie <- subset(movie, !((movie$budget == 0) | (movie$revenue == 0) | (movie$Number_Genres == 0) | (movie$vote_count == 0) 
+                         | (movie$vote_average == 0) ))
+
+```
+
+
+### Process columns
+
+```{r Q3}
+#remove unused columns and renames columns
+
+movie = movie[,c(9,5,3,13,6,12,8,2,7,4,10,11)]
+
+colnames(movie)[c(2,3,4,5,11,12)] = c("company","genre","genrecount","date","score","vote")
+
+row.names(movie) <- NULL #reorder row names
+```
+
+### Create columns
+
+```{r Q4}
+
+movie$profit = movie$revenue - movie$budget # create profit column
+
+movie$roi = (movie$profit)*100/(movie$budget) # create ROI column
+
+movie$profitable <- c(0) #create profitable column indicating whether a movie has negative or posite profit
+
+for (i in 1:nrow(movie)) {if (movie[i,"profit"] > 0) {movie[i,"profitable"] = 1} } #positive profit is applied as 1, negative is 0
+
+movie$profitable = as.factor(movie$profitable) #make sure the profitable outputs are factors
+
+
+
+```
+
+### Refactor
+
+```{r Q5}
+movie$title = as.factor(as.character(movie$title))
+movie$date = as.factor(as.character(movie$date))
+movie$genre = as.factor(as.character(movie$genre))
+
+
+```
+
+
+
+### Company
+
+```{r Q6}
+movie$company = as.character(movie$company)  #change company to character for easy function
+
+# Below is the list of studios in 5 largest parent studios in the world. 
+# I collect information from wiki and some websites. Although the lists may lack some minor studios, they include most of popular ones.
+
+warner = c("Warner Bros.", "Warner Bros. Pictures", "Warner Bros. Animation", "Warner Bros. Family Entertainment", "Warner Brothers/Seven Arts",  "New Line Cinema", "DC Comics","Castle Rock Entertainment")
+
+universal = c("Universal","Universal Pictures", "Universal Pictures Corporation", "Universal Studios", "DreamWorks", "DreamWorks Animation", "DreamWorks SKG", "Amblin Entertainment", "Working Title Films", "Focus Features", "Focus Films","Gramercy Pictures")
+
+paramount = c("Paramount Pictures", "Paramount", "Paramount Classics", "Paramount Vantage","MTV Films","Nickelodeon Movies")
+
+walt_disney = c("Walt Disney", "Walt Disney Animation Studios", "Walt Disney Pictures", "Walt Disney Productions", "Walt Disney Studios Motion Pictures", "Walt Disney Television Animation", "Buena Vista", "Touchstone Pictures", "Hollywood Pictures", "Caravan Pictures","Miramax","Miramax Films","Dimension Films","Marvel Studios", "Twentieth Century Fox Film Corporation", "Blue Sky Studios","Lucasfilm","Fox 2000 Pictures", "Fox Atomic","Fox Entertainment Group","Fox Searchlight Pictures","UTV Motion Pictures","")
+
+sony = c("Columbia Pictures","Columbia Pictures Corporation", "Columnbia Pictures Industries", "Sony Pictures", "Sony Pictures Animation", "Sony Pictures Classics", "TriStar Pictures","Destination Films") 
+
+#other film companies will be saved into "Other" group
+
+```
+
+
+
+```{r Q7}
+
+for (i in 1:nrow(movie)) {
+  if (movie[i,"company"]%in%warner) {movie[i,"company"] = "Warner Bros"}
+  
+  else if(movie[i,"company"]%in%universal) {movie[i,"company"] = "Universal Pictures"}
+  
+  else if(movie[i,"company"]%in%paramount) {movie[i,"company"] = "Paramount Pictures"}
+  
+  else if(movie[i,"company"]%in%walt_disney) {movie[i,"company"] = "Walt Disney"}
+  
+  else if(movie[i,"company"]%in%sony) {movie[i,"company"] = "Sony Pictures"}
+  
+  else (movie[i,"company"] = "Others")
+  
+} 
+
+movie$company = as.factor(movie$company) #change company back to factors
+
+
+```
+
+
+```{r Q8}
+comp_count = data.frame(table(movie$company))
+ggplot(comp_count, aes(x = reorder(Var1, Freq), y = Freq)) + 
+  geom_bar(stat = 'identity', fill ='blue', alpha = 0.7) + coord_flip() +
+  ylab("Number of movies") +
+  xlab("Studios") +
+  ggtitle(("Number of movies by Studios")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+```
+
+
+## Model
+
+### Scale the predictors
+
+```{r Q9}
+str(movie)
+```
+
+
+## Profit
+
+### Correlation
+```{r corr,echo = F}
+
+movies_reg <- subset(movie, select = - c(title,date,genre,genrecount,company,revenue,roi,profitable))
+c <- cor(movies_reg)
+corrplot(c, method = "square")
+```
+
+We get that budget, popularity and vote have relatively strong correlations with profit. While runtime and score have moderate correlation. And the correlation between profit and month is really weak.
+
+```{r OneHotCodingMonth, echo = F}
+M = factor(movie$month) 
+dummm = as.data.frame(model.matrix(~M)[,-1])
+movie_M = cbind(movie, dummm) 
+movies_c <- subset(movie_M, select = - c(month,runtime,budget,popularity,score,vote,title,date,genre,genrecount,company,revenue,roi,profitable))
+cc <- cor(movies_c)
+corrplot(cc, method = "square")
+str(movie_M)
+```
+
+* Month is not correlated with profit, but we do observe that month six (June) has relatively positive effect on profit, whereas month nine (september) has relatively negative effect on profit.  
+
+```{r OneHotCodingCompany,echo = F}
+
+library(data.table)
+#apply one hot coding on the company
+FactoredVariable = factor(movie_M$company) 
+dumm = as.data.frame(model.matrix(~FactoredVariable)[,-1])
+movie_OH = cbind(movie_M, dumm) 
+#Rename the colume name
+names(movie_OH)[names(movie_OH) == 'FactoredVariableParamount Pictures'] <- 'Paramount'
+names(movie_OH)[names(movie_OH) == 'FactoredVariableSony Pictures'] <- 'Sony'
+names(movie_OH)[names(movie_OH) == 'FactoredVariableUniversal Pictures'] <- 'Universal'
+names(movie_OH)[names(movie_OH) == 'FactoredVariableWalt Disney'] <- 'Disney'
+names(movie_OH)[names(movie_OH) == 'FactoredVariableWarner Bros'] <- 'Warner Bro'
+#
+movies_cor <- subset(movie_OH, select = - c(title,month,runtime,budget,popularity,score,vote,date,genre,genrecount,company,revenue,roi,profitable,M2,M3,M4,M5,M6,M7,M8,M9,M10,M11,M12))
+c <- cor(movies_cor)
+print(c)
+#corrplot(c, method = "square")
+```
+
+* For each company we create a new column under the name of that company and mark 0 or 1 depending on if the movie is of that company. By the correlations between different companies with profit, we get that they are all dependent with profit.
+
+```{r OneHotCodingGenre,echo = F}
+G = factor(movie_OH$genre) 
+dumm = as.data.frame(model.matrix(~G)[,-1])
+movie_OH = cbind(movie_OH, dumm)
+#str(movie_OH)
+```
+
+```{r correlationGenre,echo = F}
+movies_cor <- subset(movie_OH, select = - c(title,month,runtime,budget,popularity,score,vote,date,genre,genrecount,company,revenue,roi,profitable,M2,M3,M4,M5,M6,M7,M8,M9,M10,M11,M12))
+movies_corr <- subset(movies_cor, select = -c(Paramount,Sony,Universal,Disney,`Warner Bro`))
+cr <- cor(movies_corr)
+corrplot(cr)
+```
+
+* For each genre we create a new column under the name of that genre and mark 0 or 1 depending on if the movie is of that genre. By the correlations between different genres with profit, we get that they are all dependent with profit.
+
+### LinearRegression
+
+#### Initial Model
+```{r linearregression, echo=FALSE}
+movie_reg <- subset(movie_OH,select = -c(title,date,genre,genrecount,company,revenue,roi,profitable))
+
+#Scale some of the variables(center)
+movie_reg$budget <- scale(movie_reg$budget)
+movie_reg$profit <- scale(movie_reg$profit)
+movie_reg$popularity <- scale(movie_reg$popularity)
+movie_reg$runtime <- scale(movie_reg$runtime)
+movie_reg$vote <- scale(movie_reg$vote)
+#str(movie_reg)
+p.linear <- lm(profit~.,data=movie_reg)
+print(summary(p.linear))
+#coef(p.linear)
+#confint(p.linear)
+```
+
+* The first model call is `r format(summary(p.linear)$call)`.
+* By the result of our initial linear regression model on profit, we get that it is unlikely we will observe a relationship between some of the __predictors__ (like company universal, company disney, genre adventure, genre animation) and the __response__ (profit)
+
+#### Model Selection
+
+```{r}
+loadPkg("leaps")
+loadPkg("ISLR")
+#This is essentially best fit 
+movie_reg$month <- as.factor(movie_reg$month)
+reg.best <- regsubsets(profit~. , data = movie_reg, nvmax = 14, nbest = 1, method = "backward")  # leaps, regsubsets: Model selection by exhaustive search, forward or backward stepwise, or sequential replacement
+#The plot will show the Adjust R^2 when using the variables across the bottom
+plot(reg.best, scale = "adjr2", main = "Adjusted R^2")
+plot(reg.best, scale = "r2", main = "R^2")
+# In the "leaps" package, we can use scale=c("bic","Cp","adjr2","r2")
+plot(reg.best, scale = "bic", main = "BIC")
+plot(reg.best, scale = "Cp", main = "Cp")
+# summary(reg.best)
+```
+
+```{r, warning=F, echo=F}
+loadPkg("car")
+summaryRegForward = summary(reg.best)
+# Adjusted R2
+subsets(reg.best, statistic="adjr2", legend = FALSE, main = "Adjusted R^2")
+# Mallow Cp
+res.legend <- subsets(reg.best, statistic="cp", legend = FALSE , main = "Mallow Cp")
+# this output gives the list of variables and their abbreviations
+```
+
+According to the plots above, we know that predictors (budget, vote, month5, month6,month12, genre family, and genre animation) form the best model.
+
+#### Other linear models
+
+```{r split, echo = F}
+#str(movie_OH)
+p.linear2 <- lm(profit~budget+vote+M5+M6+M12+GAnimation+GFamily,data=movie_OH)
+summary(p.linear2)
+```
+
+* With r-square equal to 0.591, 59.10% of profit can be explained by the 7 features above, like the movie budget, wheather the movie is release in May, June or Decemenber. The accuracy of the new model is close to the original one. We can reduce the number of variables to 7. With the 7 features above, we are likely to achieve the model with similar level of fitness compared to the original linear regression model.
+
+### Ridge regression
+
+```{r, echo = F, warning = F}
+xr=model.matrix(profit~.,movie_reg)[,-1]
+yr=movie_reg$profit
+loadPkg("glmnet")
+lambdas=10^seq(10,-4,by = -.1) # prepare log scale grid for λ values, from 10^10 to 10^-4
+ridge.mod=glmnet(xr,yr,alpha=0,lambda=lambdas) # build the ridge model.
+dim(coef(ridge.mod)) 
+plot(ridge.mod) 
+fit <- ridge.mod$lambda
+#summary(fit)
+```
+
+* The glmnet( ) function creates 141 models, with our choice of 141 $\lambda$ values. Each model coefficients are stored in the object we named: ridge.mod  
+* There are 41 coefficients for each model. The 141 $\lambda$ values are chosen from $10^{-4}$ to $10^{10}$, essentially covering the ordinary least square model ($\lambda$ = 0), and the null/constant 
+model ($\lambda$ approach infinity).
+
+
+```{r ridge, echo = F}
+cv_fit <- cv.glmnet(xr, yr, alpha = 0, lambda = lambdas)
+plot(cv_fit)
+```
+
+```{r getbestlam, include =F}
+bestlam = cv_fit$lambda.min  # Select lamda that minimizes training MSE
+bestlam
+
+fit<-cv_fit$glmnet.fit
+y_predicted <- predict(fit, s = bestlam, newx = xr)
+# Sum of Squares Total and Error
+sst <- sum((yr - mean(yr))^2)
+sse <- sum((y_predicted - yr)^2)
+# R squared
+rsq <- 1 - sse / sst
+rsq
+```
+
+* We try to find a value for lambda that is optimal. And it turns that the best lambda value is `r bestlam`.  
+* With lambda equal to `r bestlam`, we have the r square to be `r rsq`.
+```{r, echo = F}
+ridge.mod$lambda[50] # 11498
+coef(ridge.mod)[,50]
+sqrt(sum(coef(ridge.mod)[-1,50]^2)) # 0.000155
+ridge.mod$lambda[60] # 705
+coef(ridge.mod)[,60] 
+sqrt(sum(coef(ridge.mod)[-1,60]^2))  # 0.0025
+```
+
+### Lasso Regression
+
+## Train and test
+
+```{r, include = F}
+loadPkg("dplyr")
+set.seed(1)
+train = movie_reg %>% sample_frac(0.5)
+test = movie_reg %>% setdiff(train)
+
+x_train = model.matrix(profit~., train)[,-1]
+x_test = model.matrix(profit~., test)[,-1]
+
+y_train = train %>% select(profit) %>% unlist() # %>% as.numeric()
+y_test = test %>% select(profit) %>% unlist() # %>% as.numeric()
+```
+
+## Build the model
+```{r}
+lasso.mod=glmnet(x_train,y_train,alpha=1,lambda=lambdas)
+plot(lasso.mod)
+set.seed(1)
+cv.out=cv.glmnet(x_train,y_train,alpha=1)
+plot(cv.out)
+
+```
+Here, we see that the lowest MSE is when $\lambda$ appro = 0.041. It has 6 non-zero coefficients. 
+
+```{r}
+bestlam=cv.out$lambda.min
+lasso.pred=predict(lasso.mod,s=bestlam,newx=x_test)
+mean((lasso.pred-y_test)^2)
+out = glmnet(xr, yr, alpha = 1, lambda = lambdas) # Fit lasso model on full dataset
+lasso_coef = predict(out, type = "coefficients", s = bestlam)[1:41,] # Display coefficients using λ chosen by CV
+lasso_coef
+lasso_coef[lasso_coef!=0]
+lasso_coef[lasso_coef==0]
+```
+
