@@ -1268,6 +1268,7 @@ summary(pcr_lm4)
 vif(pcr_lm4)
 
 
+
 ```
 
 
@@ -1292,6 +1293,13 @@ if (require("pls")) {detach("package:pls", unload = T)  # for some reason packag
 ```
 
 Both AIC and BIC agree that the scaled version is better.
+
+```{r testpcr}
+prd_pcr <- predict(pcr_lm4, newdata=movie_pcr_test)
+
+regr.eval(movie_pcr_test$revenue, prd_pcr)
+
+```
 
 ## Conclusion
 
@@ -1547,7 +1555,7 @@ loadPkg("pROC")
 h0 <- roc(test3$y ~ prof_glm_pred) # using the model on testing data and see the ROC curve and AUC
 auc(h0) # area-under-curve prefer 0.8 or higher.
 plot(h0)
-title("Best Model ROC")
+title("ROC curve")
 
 ```
 
@@ -1572,17 +1580,19 @@ prf_mcFadden
 loadPkg("caret")
 
 logit_accuracy <- c(1:5)
+logit_kappa <- c(1:5)
 threshold_logit <- c(0.5, 0.6, 0.7, 0.8, 0.9) # set threshold for predicted probabilities
 j = 1
 
 for (i in c(0.5, 0.6, 0.7, 0.8, 0.9)) {
 conf_matrix <- confusionMatrix(data = as.factor(as.integer(prof_glm_pred>i)), reference = test3$y); # using the model on the testing data
 logit_accuracy[j] <- conf_matrix$overall[1]*100;
+logit_kappa[j] <- conf_matrix$overall[2]
 j = j+1
 }
 
 # we can see the results at threshold = 0.9 as an example
-confusionMatrix(data = as.factor(as.integer(prof_glm_pred>0.9)), reference = test3$y)
+confusionMatrix(data = as.factor(as.integer(prof_glm_pred>0.5)), reference = test3$y)
 ```
 
 
@@ -1590,7 +1600,7 @@ confusionMatrix(data = as.factor(as.integer(prof_glm_pred>0.9)), reference = tes
 
 # combine results into a dataframe
 
-logit_prediction <- as.data.frame(cbind(threshold = threshold_logit, accuracy = logit_accuracy))
+logit_prediction <- as.data.frame(cbind(threshold = threshold_logit, accuracy = logit_accuracy, kappa = logit_kappa))
 logit_prediction 
 
 ```
@@ -1627,7 +1637,7 @@ prp(prf_dt, main = "Classification Trees for Profit Status")
 
 
 #rpart.plot(prf_dt,main = "Classification Trees for Profit Status")
-fancyRpartPlot(prf_dt, main = "Classification Trees for Profit Status")
+fancyRpartPlot(prf_dt)
 
 ```
 
@@ -1644,14 +1654,14 @@ plotcp(prf_dt) # visualize cross-validation results
 
 ```
 
-Relative error is lowest at CP = 4, numbers of split = 7.
+Relative error is lowest at CP = 5, numbers of split = 8.
 
 Let's see our tree after pruning.
 
 ```{r Q91, include = T}
 
  prf_dt_prune <- prune(prf_dt, cp = prf_dt$cptable[which.min(prf_dt$cptable[,"xerror"]),"CP"]) # prune trees at cp where xerror is minimum
-
+ #prf_dt_prune <- prune(prf_dt, cp = prf_dt$cptable[4,"CP"])
 # plot tree 
 prp(prf_dt_prune, main = "Classification Trees for Profit Status")
 
@@ -1741,8 +1751,8 @@ test2 <- test1_full
 test2$revenue <- scale(test2$revenue, center = TRUE, scale = TRUE)
 
 
-#str(train2)
-#str(test2)
+str(train2)
+str(test2)
 
 
 ```
