@@ -260,8 +260,8 @@ movie_r <- subset(movie,select = -c(title,date,genrecount,revenue,roi,profitable
 p.l <- lm(profit~.,data=movie_r)
 str(movie_r)
 #print(summary(p.linear2))
-F1 <- data.frame(company = 'Walt Disney',genre = 'Animation',month = 11, runtime = 104 ,budget = 150000000, popularity = 165.13, score = 7.3,vote = 5295)
-predict(p.l,F1)
+F1 <- data.frame(company = 'Walt Disney',genre = 'Animation',month = '11', runtime = 104 ,budget = 150000000, popularity = 165.13, score = 7.3,vote = 5295)
+predict(f.model,F1)
 ```
 
 * The first model call is `r format(summary(p.linear)$call)`.
@@ -444,6 +444,9 @@ RFregressor = randomForest(x = movies_rf[-9],
 
 ```{r}
 plot(RFregressor)
+print(RFregressor)
+summary(RFregressor)
+
 ```
 
 ```{r}
@@ -531,4 +534,9 @@ newl <- lm(profit~budget,movie_r)
 summary(newl)
 plot(subset(movie_r, select = c(budget,profit)), main ="Scatter Plot")
 abline(newl)
+```
+
+### Logistic Regression
+```{r logistic}
+logi = glm(I(wage>250)~poly(age,4), data = movie_r, family = binomial)
 ```
