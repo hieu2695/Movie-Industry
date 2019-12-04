@@ -244,7 +244,7 @@ movie_reg$vote <- scale(movie_reg$vote)
 #str(movie_reg)
 
 p.linear <- lm(profit~.,data=subset(movie_reg,select = -c(month)))
-#print(summary(p.linear))
+print(summary(p.linear))
 
 #coef(p.linear)
 #confint(p.linear)
@@ -259,7 +259,7 @@ movie_r <- subset(movie,select = -c(title,date,genrecount,revenue,roi,profitable
 
 p.l <- lm(profit~.,data=movie_r)
 str(movie_r)
-#print(summary(p.linear2))
+print(summary(p.linear2))
 F1 <- data.frame(company = 'Walt Disney',genre = 'Animation',month = '11', runtime = 104 ,budget = 150000000, popularity = 165.13, score = 7.3,vote = 5295)
 predict(f.model,F1)
 ```
@@ -405,10 +405,34 @@ plot(cv.out)
 Here, we see that the lowest MSE is when $\lambda$ appro = 0.041. It has 6 non-zero coefficients. 
 
 ```{r}
-bestlam=cv.out$lambda.min
-lasso.pred=predict(lasso.mod,s=bestlam,newx=x_test)
+Lbestlam=cv.out$lambda.min
+lasso.pred=predict(lasso.mod,s=Lbestlam,newx=x_test)
+
+#fit<-cv_fit$glmnet.fit
+y_predicted <- predict(lasso.mod, s = bestlam, newx = xr)
+# Sum of Squares Total and Error
+Lsst <- sum((yr - mean(yr))^2)
+Lsse <- sum((y_predicted - yr)^2)
+# R squared
+Lrsq <- 1 - Lsse / Lsst
+Lrsq
+
+```
+
+```{r}
 mean((lasso.pred-y_test)^2)
-out = glmnet(xr, yr, alpha = 1, lambda = lambdas) # Fit lasso model on full dataset
+
+out = cv.glmnet(xr, yr, alpha = 1,lambda = lambdas)# Fit lasso model on full dataset
+bl <- out$lambda.min
+#lasso.pred=predict(out,s=bl,newx=xr)
+yp <- predict(out, s = bl, newx = xr)
+# Sum of Squares Total and Error
+Lsst <- sum((yr - mean(yr))^2)
+Lsse <- sum((yp - yr)^2)
+# R squared
+Lrsq <- 1 - Lsse / Lsst
+Lrsq
+
 lasso_coef = predict(out, type = "coefficients", s = bestlam)[1:40,] # Display coefficients using λ chosen by CV
 lasso_coef
 lasso_coef[lasso_coef!=0]
@@ -420,6 +444,9 @@ lasso_coef[lasso_coef==0]
 
 ```{r}
 str(movies_rf)
+RFregressor = randomForest(x = movies_rf[-9],
+                         y = movies_rf$profit,
+                         ntree = 500)
 ```
 
 ```{r rf}
@@ -538,5 +565,30 @@ abline(newl)
 
 ### Logistic Regression
 ```{r logistic}
-logi = glm(I(wage>250)~poly(age,4), data = movie_r, family = binomial)
+movie_l <- subset(movie,select = -c(title,date,genrecount,revenue,roi))
+movie_l$month <- as.factor(movie_l$month)
+logi = glm(profitable~., data = movie_l, family = binomial)
+#print(logi)
+#summary(logi)
+
+library(pscl)
+pR2(logi)
+
+#install('survey')
+#library(survey)
+#regTermTest(logi, "company")
+
+loadPkg("aod")  # Analysis of Overdispersed Data, used wald.test in logit example
+
+Walt.test <- wald.test(b = coef(logi), Sigma = vcov(logi), Terms = 7:23)
+library(caret)
+VI <- varImp(logi)
+#order(VI$Overall)
+newdata <- VI[order(VI$Overall),] 
+#mod_fit <- train(Class ~ Age + ForeignWorker + Property.RealEstate + Housing.Own + 
+                   #CreditHistory.Critical,  data=training, method="glm", family="binomial")
+```
+
+```{r}
+plot(movie$budget,movie$profit)
 ```
