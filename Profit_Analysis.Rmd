@@ -257,11 +257,11 @@ movie_r <- subset(movie,select = -c(title,date,genrecount,revenue,roi,profitable
 #movie_r$vote <- scale(movie_r$vote)
 #movie_r$month <- as.factor(movie_r$month)
 
-p.l <- lm(profit~.,data=movie_r)
-str(movie_r)
-print(summary(p.linear2))
-F1 <- data.frame(company = 'Walt Disney',genre = 'Animation',month = '11', runtime = 104 ,budget = 150000000, popularity = 165.13, score = 7.3,vote = 5295)
-predict(f.model,F1)
+#p.l <- lm(profit~.,data=movie_r)
+#str(movie_r)
+#print(summary(p.linear2))
+#F1 <- data.frame(company = 'Walt Disney',genre = 'Animation',month = '11', runtime = 104 ,budget = 150000000, popularity = 165.13, score = 7.3,vote = 5295)
+#predict(f.model,F1)
 ```
 
 * The first model call is `r format(summary(p.linear)$call)`.
@@ -321,8 +321,8 @@ According to the plots above, we know that predictors (budget, vote, month5, mon
 
 ```{r split, echo = F}
 #str(movie_OH)
-p.linear2 <- lm(profit~budget+vote+M5+M6+M12+GAnimation+GFamily,data=movie_OH)
-summary(p.linear2)
+#p.linear2 <- lm(profit~budget+vote+M5+M6+M12+GAnimation+GFamily,data=movie_OH)
+#summary(p.linear2)
 ```
 
 * With r-square equal to 0.591, 59.10% of profit can be explained by the 7 features above, like the movie budget, wheather the movie is release in May, June or Decemenber. The accuracy of the new model is close to the original one. We can reduce the number of variables to 7. With the 7 features above, we are likely to achieve the model with similar level of fitness compared to the original linear regression model.
@@ -410,25 +410,11 @@ cv.out=cv.glmnet(x_train,y_train,alpha=1)
 plot(cv.out)
 
 ```
-Here, we see that the lowest MSE is when $\lambda$ appro = 0.041. It has 6 non-zero coefficients. 
+Here, we see that the lowest MSE is when $\lambda$ appro = . It has  non-zero coefficients. 
+
 
 ```{r}
-Lbestlam=cv.out$lambda.min
-lasso.pred=predict(lasso.mod,s=Lbestlam,newx=x_test)
-
-#fit<-cv_fit$glmnet.fit
-y_predicted <- predict(lasso.mod, s = bestlam, newx = xr)
-# Sum of Squares Total and Error
-Lsst <- sum((yr - mean(yr))^2)
-Lsse <- sum((y_predicted - yr)^2)
-# R squared
-Lrsq <- 1 - Lsse / Lsst
-Lrsq
-
-```
-
-```{r}
-mean((lasso.pred-y_test)^2)
+#mean((lasso.pred-y_test)^2)
 
 out = cv.glmnet(xr, yr, alpha = 1,lambda = lambdas)# Fit lasso model on full dataset
 bl <- out$lambda.min
@@ -451,7 +437,7 @@ lasso_coef[lasso_coef==0]
 ### Random Forest Regression
 
 ```{r}
-str(movies_rf)
+#str(movies_rf)
 RFR = randomForest(x = subset(movie,select = c(budget,score,vote,runtime,popularity)),
                          y = movie$profit,
                          ntree = 500)
@@ -510,7 +496,7 @@ Frozen2_profita = predict(RFregressor, Frozen2a)
 Frozen <- data.frame(company = 'Walt Disney',genre = 'Animation',month = 11, runtime = 104 ,budget = 150000000, popularity = 165.13, score = 7.3,vote = 5295)
 levels(Frozen$company) <- RFregressor$forest$xlevels$company
 levels(Frozen$genre) <- RFregressor$forest$xlevels$genre
-Frozen_profit = predict(RFregressor, Frozen2)
+Frozen_profit = predict(RFregressor, Frozen)
 
 
 #651000000
@@ -521,92 +507,5 @@ Frozen_profit = predict(RFregressor, Frozen2)
 
 ```{r}
 #summary(p.l)
-predict(p.l,Frozen)
+#predict(p.l,Frozen)
 ```
-### more regression
-```{r}
-#quantile(movie$popularity)
-#plot(sort(movie_r$runtime))
-#plot(movie_r[order(movie_r$runtime),]$profit, add = TRUE)
-
-plot(sort(movie_r$popularity))
-plot(movie_r[order(movie_r$popularity),]$profit, add = TRUE)
-```
-
-
-
-```{r Polyregrssion}
-pop.l <- lm(profit~popularity,movie_r)
-summary(pop.l)
-model <- lm(movie_r$profit ~ poly(movie_r$popularity,4))
-summary(model)
-str(movie_r)
-```
-
-```{r more}
-v <- poly(movie_r$popularity,4)
-f.model <- lm(profit ~poly(popularity,10)+poly(vote,10)+company+month+genre+poly(runtime,2)+poly(budget,3)+poly(score,6), data = movie_r)
-summary(f.model)
-```
-
-```{r svr}
-#install.packages('e1071')
-library(e1071)
-regressor = svm(formula = profit ~ .,
-                data = movie_r,
-                type = 'eps-regression',
-                kernel = 'radial')
-#summary(regressor)
-
-predictedY <- predict(regressor, movie_r)
-
-plot(predictedY)
-plot(movie_r$profit)
-```
-
-
-```{r}
-newl <- lm(profit~budget,movie_r)
-summary(newl)
-plot(subset(movie_r, select = c(budget,profit)), main ="Scatter Plot")
-abline(newl)
-```
-
-### Logistic Regression
-```{r logistic}
-movie_l <- subset(movie,select = -c(title,date,genrecount,revenue,profit,roi))
-movie_l$month <- as.factor(movie_l$month)
-movie_l$runtime<-scale(movie_l$runtime)
-movie_l$budget<-scale(movie_l$budget)
-movie_l$popularity<-scale(movie_l$popularity)
-movie_l$score<-scale(movie_l$score)
-movie_l$vote<-scale(movie_l$vote)
-str(movie_l)
-
-logi = glm(profitable~., data = movie_l, family = binomial)
-#print(logi)
-#summary(logi)
-
-library(pscl)
-pR2(logi)
-
-#install('survey')
-#library(survey)
-#regTermTest(logi, "company")
-
-loadPkg("aod")  # Analysis of Overdispersed Data, used wald.test in logit example
-
-Walt.test <- wald.test(b = coef(logi), Sigma = vcov(logi), Terms = 7:23)
-library(caret)
-VI <- varImp(logi)
-#order(VI$Overall)
-newdata <- VI[order(VI$Overall),] 
-#mod_fit <- train(Class ~ Age + ForeignWorker + Property.RealEstate + Housing.Own + 
-                   #CreditHistory.Critical,  data=training, method="glm", family="binomial")
-```
-
-```{r}
-plot(movie$budget,movie$profit)
-subset(movie,profit < 0)
-```
-
