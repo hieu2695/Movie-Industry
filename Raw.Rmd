@@ -416,8 +416,8 @@ It seems that winter - fall are in the same group and spring - summer are in the
 scale_movie <- as.data.frame(scale(movie_num[c(2:6)], center = TRUE, scale = TRUE)) 
 
 
-
-
+str(movie_num_all)
+str(scale_movie)
 
 ```
 
@@ -428,6 +428,36 @@ scale_movie <- as.data.frame(scale(movie_num[c(2:6)], center = TRUE, scale = TRU
 set.seed(1000)
 
 movie_sample <- sample(2, nrow(scale_movie), replace=TRUE, prob=c(0.67, 0.33)) #  split the data with ratio 67:33
+
+```
+
+
+```{r testprofit}
+
+
+xtrain0 <- scale_movie[movie_sample==1, 1:5] # train set contaning predictors
+xtest0 <- scale_movie[movie_sample==2, 1:5] # test set containing predictors
+
+
+
+ytrain0 <- movie_num_all[movie_sample==1, 7] # train set containing the response "revenue"
+ytest0 <- movie_num_all[movie_sample==2, 7] # test set containing the response "revenue"
+
+# we can combine them into an overall data frame
+train0 <- as.data.frame(cbind(profit = ytrain0,xtrain0)) 
+test0 <- as.data.frame(cbind(profit = ytest0,xtest0))
+train0$genres <- movie$genres[movie_sample == 1]
+train0$company<- movie$company[movie_sample == 1]
+train0$season <- movie$season[movie_sample == 1]
+str(train0)
+str(test0)
+rev_lm10 <- lm(profit ~ budget + popularity + runtime + vote +genres + company, data = train0) # construct the model
+summary(rev_lm10) # summary of the model
+vif(rev_lm10) # check vifs
+#movie_num_all[7]
+
+
+
 
 ```
 
@@ -451,6 +481,21 @@ str(train1)
 str(test1)
 
 ```
+
+
+
+```{r randomforestprofit}
+
+set.seed(123)
+rf_pro <- randomForest(profit ~., data = train0, ntree = 500, mtry = 3)
+
+rf_pro
+
+
+
+```
+
+
 
 ## Linear model
 
@@ -1689,7 +1734,7 @@ table_dt
 
 # Accuracy Calculation
 sum(diag(table_dt))/sum(table_dt) # sum(true positive + false negative)/ total 
-
+confusionMatrix(reference = test3$y, data = prf_dt.pred) 
 #length(prf_dt.pred)
 
 ```
@@ -1711,9 +1756,9 @@ prf_dt.pred1 <- predict(prf_dt_prune, test3, type = "prob" )
 
 
 
-prf_dt.conf <- confusionMatrix(data = as.factor(as.integer(prf_dt.pred1[,2]>0.5)), reference = test3$y) 
+#prf_dt.conf <- confusionMatrix(data = as.factor(as.integer(prf_dt.pred1[,2]>0.5)), reference = test3$y) 
 # the accuracy will be the same as the accuracy we calculate when setting type=class, we can see the results to check it
-prf_dt.conf # the accuracy is also 80.5% and the confusion matrix is the same too
+#prf_dt.conf # the accuracy is also 80.5% and the confusion matrix is the same too
 
 #plot ROC and see AUC
 h_dt <- roc(test3$y ~ prf_dt.pred1[,2])
@@ -2106,7 +2151,44 @@ accuracy(movie_arima, movie.ts.test)
 
 ```
 
+```{r knnprofit}
+
+#test3
+#train3
+knn_profit <- knn(train = train3[c(1:5)], test = test3[c(1:5)], cl=train3$y, k=3)
+CrossTable( knn_profit,test3$y, prop.chisq = FALSE) 
+
+```
+
+```{r plotkknn}
+knn_k_profit = sapply(seq(1, 21, by = 2),  #<- set k to be odd number from 1 to 21
+                         function(x) chooseK(x, 
+                                             train_set = train3[c(1:5)],
+                                             val_set = test3[c(1:5)],
+                                             train_class = train3$y,
+                                             val_class = test3$y))
+# Reformat the results to graph the results.
+#str(knn_different_k)
+knn_k_profit = data.frame(k = knn_k_profit[1,],
+                             accuracy = knn_k_profit[2,])
+
+# Plot accuracy vs. k.
+
+ggplot(knn_k_profit,
+       aes(x = k, y = accuracy)) +
+  geom_line(color = "orange", size = 1.5) +
+  geom_point(size = 3) +
+  theme_bw()
+  #theme(plot.title = element_text(hjust=0.5, size = 15, face = "bold.italic"))
 
 
+```
 
+```{r bestknn}
+
+knn_profit <- knn(train = train3[c(1:5)], test = test3[c(1:5)], cl=train3$y, k=7)
+
+CrossTable( knn_profit,test3$y, prop.chisq = FALSE) 
+confusionMatrix(data=test3$y, reference = knn_profit)
+```
 
