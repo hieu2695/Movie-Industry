@@ -26,6 +26,8 @@ loadPkg = function(x) { if (!require(x,character.only=T, quietly =T)) { install.
 ```
 
 
+
+
 ```{r loadsomepackage}
 
 #load some packages that will be used
@@ -252,6 +254,7 @@ summary(movie) # summary of the whole data
 
 ```
 
+We need to scale the data, too high difference.
 
 ```{r Q11, include = T}
 
@@ -330,6 +333,9 @@ ggplot(genres_count, aes(x = reorder(Var1, Freq), y = Freq)) +
 
 
 # Chapter 3. Revenue Prediction
+
+In this section, we will try three models: Linear Regression, Decision Tree (Regression Tree since the response is continuous variable) and Random Forest. In each model, we will choose the best formula (adj R2, BIC, CP for Linear Regression, pruning for Regression Tree, tuning for Random Forest). And then we compare the three best models.
+
 ## Dependency
 
 ### Numerical Variables
@@ -353,6 +359,8 @@ corrplot(cordf) # correlation plot
 
 
 ```
+
+* We can check the effect of categorical variables by anova test.
 
 ### Genre
 
@@ -404,7 +412,6 @@ adhoc_ss
 It seems that winter - fall are in the same group and spring - summer are in the same group.
 
 
-## Model
 
 ### Training and testing sets
 
@@ -958,6 +965,8 @@ metrics_test_rf1[c(1,3)]
 
 ```
 
+
+
 Training
 
 ```{r Q52, include = T}
@@ -974,7 +983,7 @@ options(scientific=T, digits = 3) # change back to our initial format
 We can see the decreases in MAE and RMSE after tuning the forest.
 
 
-## Summary
+## Conclusion
 
 Model| Linear Model (budget + vote + popularity + company + genres) | Regression Tree | Random Forest |
 ---|---|---|---|
@@ -984,8 +993,9 @@ MAE - test| `r format(rev_lm_metrics_test3[c(1)], digits = 2)`| `r format(metric
 RMSE - train| `r format(rev_lm_metrics_train3[c(3)], digits = 2)`| `r format(metrics_train_tree[c(3)], digits = 2)`| `r format(metrics_train_rf1[c(3)], digits = 2)`|
 RMSE - test| `r format(rev_lm_metrics_test3[c(3)], digits = 2)`| `r format(metrics_test_tree[c(3)], digits =2)`| `r format(metrics_test_rf1[c(3)], digits = 2)`|
 
+Random Forest has the best performance among three models. There is no potential overfitting as well.
 
-# Chapter 4. Principal Component Analysis
+# Chapter 4. PCA
 
 We want to examine if Principal Component Analysis method is good at dimensional reduction. In our data, we have 5 continuous variables to predict the revenue. We will perform principal component regression directly and see how many components are sufficient for the model.
 
@@ -1195,7 +1205,7 @@ coefplot(pcr.fit, intercept=TRUE) # plot coefficients of different components
 
 We can see that after PC2, the change of coefficients is not significant comparing to the difference between the coeffcients of PC1 and PC2. Hence, we can use PC1 and PC2 to optimize the model since two components are sufficient to capture the variance.
 
-#### Summary
+
 
 We can make a comparision between non-centered and centered version.
 
@@ -1317,9 +1327,12 @@ regr.eval(movie_pcr_test$revenue, prd_pcr)
 Comparing to the linear model (of numerical variables) in previous chapter, the Adjusted R-squared slightly decreases. The value drops from 71.1% to 68.1%. It is in our expectation since the goal of PCA is to reduce dimensionality. Instead of using 5 variables (budget + popularity + vote + score + runtime + ), we need only 2 variables (PC1 and PC2). We can speed up the computational process while not significantly hurting the performance of the model
 
 
-# Chapter 5. Profit Prediction
+# Chapter 5. Profitability
 
-In this chapter, we use different kinds of model to predict if a movie earns profit or not (box office revenue > budget -> earn profit). In our data, we use column profitable to record whether a movie earns profit or not; a movie with profit is labeled as 1, otherwise it is labeled as 0.
+In this chapter, we use different kinds of model to predict if a movie earns profit or not (box office revenue > budget -> earn profit). In our data, we use column profitable to record whether a movie earns profit or not; a movie with revenue > budget is labeled as 1, otherwise it is labeled as 0.
+
+We use three models in this section: Logistic Regression, Classification Tree and KNN. 
+
 
 
 ## Prior Chi-squared test 
@@ -1603,7 +1616,7 @@ j = j+1
 }
 
 # we can see the results at threshold = 0.9 as an example
-confusionMatrix(data = as.factor(as.integer(prof_glm_pred>0.5)), reference = test3$y)
+confusionMatrix(data = as.factor(as.integer(prof_glm_pred>0.54)), reference = test3$y)
 ```
 
 
@@ -1737,14 +1750,95 @@ plot(h_dt)
 
 The area under the curve is 0.764 (smaller than 0.8). Classification tree seems not be as good as Logistic Regression in this case.
 
+## KNN 
+```{r chooseKfunction}
+
+chooseK = function(k, train_set, val_set, train_class, val_class){
+  
+  # Build knn with k neighbors considered.
+
+  class_knn = knn(train = train_set,    #<- training set cases
+                  test = val_set,       #<- test set cases
+                  cl = train_class,     #<- category for classification
+                  k = k,                #<- number of neighbors considered
+                 use.all = TRUE)       #<- control ties between class assignments
+                                        #   If true, all distances equal to the kth 
+                                        #   largest are included
+  
+  tab = table(class_knn, val_class)
+  
+  # Calculate the accuracy.
+  accu = sum(tab[row(tab) == col(tab)]) / sum(tab)                         
+  cbind(k = k, accuracy = accu)
+}
 
 
-# Chapter 6. Season, Company, Genres Prediction
+```
 
-We will use KNN model in this part
+
+```{r knnprofit}
+loadPkg("class")
+
+#test3
+#train3
+loadPkg("gmodels")
+knn_profit <- knn(train = train3[c(1:5)], test = test3[c(1:5)], cl=train3$y, k=3)
+CrossTable( knn_profit,test3$y, prop.chisq = FALSE) 
+
+```
+
+
+
+```{r plotkknn}
+
+
+knn_k_profit = sapply(seq(1, 21, by = 2),  #<- set k to be odd number from 1 to 21
+                         function(x) chooseK(x, 
+                                             train_set = train3[c(1:5)],
+                                             val_set = test3[c(1:5)],
+                                             train_class = train3$y,
+                                             val_class = test3$y))
+# Reformat the results to graph the results.
+#str(knn_different_k)
+knn_k_profit = data.frame(k = knn_k_profit[1,],
+                             accuracy = knn_k_profit[2,])
+
+# Plot accuracy vs. k.
+
+ggplot(knn_k_profit,
+       aes(x = k, y = accuracy)) +
+  geom_line(color = "orange", size = 1.5) +
+  geom_point(size = 3) +
+  theme_bw()
+  #theme(plot.title = element_text(hjust=0.5, size = 15, face = "bold.italic"))
+
+
+```
+
+```{r bestknn}
+
+knn_profit <- knn(train = train3[c(1:5)], test = test3[c(1:5)], cl=train3$y, k=7)
+
+CrossTable( knn_profit,test3$y, prop.chisq = FALSE) 
+confusionMatrix(data=test3$y, reference = knn_profit)
+```
+
+KNN model is the worst among three models: Logit, Classification Tree and KNN.
+
+P/s: We can try with Random Forest Model as well and it would have the best results, but our project is too long so I do not cover RF here.
+
+## Conclusion
+
+In the prediciton of Profitability, Logit Regression has the best prediciton in our case.
+
+
+
+# Chapter 6. KNN Models
+
+We will use KNN model in this part to try for some predictions. (P/s: We will discuss later to see if we should include it in the final summary).
 
 ```{r Q94, include = T}
-loadPkg("class")
+#loadPkg("class")
 
 # we use the same train and test sets as in the linear model section
 
@@ -1775,36 +1869,14 @@ str(test2)
 set.seed(123) # set seed to make sure the table won't change after we re-run the code
 season_knn <- knn(train = train2[,c(1:6)], test = test2[,c(1:6)], cl=train2$season, k=9)
 
-loadPkg("gmodels")
+
 crosstab <- CrossTable(test2$season, season_knn, prop.chisq = FALSE)
 
 ```
 
 
 
-```{r chooseKfunction}
 
-chooseK = function(k, train_set, val_set, train_class, val_class){
-  
-  # Build knn with k neighbors considered.
-
-  class_knn = knn(train = train_set,    #<- training set cases
-                  test = val_set,       #<- test set cases
-                  cl = train_class,     #<- category for classification
-                  k = k,                #<- number of neighbors considered
-                  use.all = TRUE)       #<- control ties between class assignments
-                                        #   If true, all distances equal to the kth 
-                                        #   largest are included
-  
-  tab = table(class_knn, val_class)
-  
-  # Calculate the accuracy.
-  accu = sum(tab[row(tab) == col(tab)]) / sum(tab)                         
-  cbind(k = k, accuracy = accu)
-}
-
-
-```
 
 
 ```{r Q96, include = T}
@@ -1901,9 +1973,9 @@ ggplot(knn_company_k,
 k = 23 gives the best accuracy
 
 
-# Chapter 7. Revenue by Season
+# Chapter 7. Time series
 
-We use time series model
+We use time series model in this part. We will try HoltWinters and ARIMA.
 
 ```{r Q100}
 
@@ -1943,9 +2015,7 @@ movie.ts.test <- ts(tail(movie_ts, 23)$revenue, frequency = 4, start = c(2011,1)
 ```
 
 
-## Time Series 
-
-### Visualization
+## Visualization
 
 
 ```{r boxplot, include = T}
@@ -1960,6 +2030,8 @@ ggplot(movie_ts, aes(x=quarter, y=revenue, fill = quarter)) +
 
 ```
 
+Movies in quarter 2 seems to perform well in box office revenue.
+
 ```{r Q102, include = T}
 plot(movie.ts, xlab = "Year", ylab="Revenue")
 
@@ -1968,7 +2040,7 @@ plot(movie.ts, xlab = "Year", ylab="Revenue")
 ```
 
 
-### Trend and Seasonality
+## Trend
 
 ```{r Q103, include = T}
 
@@ -1980,7 +2052,7 @@ plot(movie_dcp)
 
 ```
 
-### HoltWinters Method
+## HoltWinters 
 
 ```{r Q104}
 
@@ -2016,7 +2088,7 @@ plot(movie_ft)
 ```
 
 
-#### Model Evaluation
+#### Prediction
 
 We predict the model on the testing data
 
@@ -2043,8 +2115,8 @@ hchart(movie_ft) %>%
 
 
 # we can have a more detailed plot with only predicted and actual values in testing data
-highchart(type="chart") %>%        # try type = "chart", "stock" for different visualizations
-  hc_chart(type = "column") %>%      # try type = "line", bar", "column" for different visualizations
+highchart(type="stock") %>%        # try type = "chart", "stock" for different visualizations
+  hc_chart(type = "line") %>%      # try type = "line", bar", "column" for different visualizations
   hc_add_series_ts(movie.ts.test,name = "ACTUAL", color = "red" ) %>%   # plot the actual data labeled by red color
   hc_add_series(name = "PREDICTED", movie_ft, color = "blue" )  %>%     # plot the hw predictions labeled by blue color
   hc_legend(align = "left", verticalAlign = "top",
@@ -2055,7 +2127,9 @@ highchart(type="chart") %>%        # try type = "chart", "stock" for different v
 
 ```
 
-### ARIMA Model
+Nice prediction since the actual values are all in the 95% confidence interval.
+
+## ARIMA Model
 
 #### Forecasting
 
@@ -2091,7 +2165,7 @@ hchart(movie_arima) %>%
   hc_add_series_ts(movie.ts.test, color = "red", name = "ACTUAL")  # general graph
 
 
-# more detailed graph, Itry different stuffs here too
+# more detailed graph, I try different stuffs here
 highchart(type="chart") %>%        # try type = "chart", "stock" for different visualizations
   hc_chart(type = "column") %>%      # try type = "line", bar", "column" for different visualizations
   hc_add_series_ts(movie.ts.test,name = "ACTUAL", color = "red" ) %>%   # plot the actual data labeled by red color
@@ -2105,9 +2179,9 @@ highchart(type="chart") %>%        # try type = "chart", "stock" for different v
 
 ```
 
+In ARIMA model, some actual values are out of 95% confidence interval.
 
-
-### ARIMA vs HoltWinter
+## ARIMA vs HoltWinter
 
 ```{r Q112, include = T}
 
@@ -2117,44 +2191,5 @@ accuracy(movie_arima, movie.ts.test)
 
 ```
 
-```{r knnprofit}
-
-#test3
-#train3
-knn_profit <- knn(train = train3[c(1:5)], test = test3[c(1:5)], cl=train3$y, k=3)
-CrossTable( knn_profit,test3$y, prop.chisq = FALSE) 
-
-```
-
-```{r plotkknn}
-knn_k_profit = sapply(seq(1, 21, by = 2),  #<- set k to be odd number from 1 to 21
-                         function(x) chooseK(x, 
-                                             train_set = train3[c(1:5)],
-                                             val_set = test3[c(1:5)],
-                                             train_class = train3$y,
-                                             val_class = test3$y))
-# Reformat the results to graph the results.
-#str(knn_different_k)
-knn_k_profit = data.frame(k = knn_k_profit[1,],
-                             accuracy = knn_k_profit[2,])
-
-# Plot accuracy vs. k.
-
-ggplot(knn_k_profit,
-       aes(x = k, y = accuracy)) +
-  geom_line(color = "orange", size = 1.5) +
-  geom_point(size = 3) +
-  theme_bw()
-  #theme(plot.title = element_text(hjust=0.5, size = 15, face = "bold.italic"))
-
-
-```
-
-```{r bestknn}
-
-knn_profit <- knn(train = train3[c(1:5)], test = test3[c(1:5)], cl=train3$y, k=7)
-
-CrossTable( knn_profit,test3$y, prop.chisq = FALSE) 
-confusionMatrix(data=test3$y, reference = knn_profit)
-```
-
+ARIMA does better on training set but the performances of two models on testing set are not much difference.
+Imo, HoltWinters is better as the actual values are always in the 95 confidence interval. The difference between testing and training sets are lower as well. ARIMA may result in overfitting (low variance on training set but in testing set we have high bias).
