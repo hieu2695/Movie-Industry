@@ -330,11 +330,18 @@ summary(p.linear2)
 ### Ridge regression
 
 ```{r, echo = F, warning = F}
-m_r <- subset(movie,select = c(company,month,genre,popularity,vote,score,budget))
+m_r <- subset(movie,select = c(company,month,genre,popularity,vote,score,budget,profit))
+m_r$month <- as.factor(m_r$month)
+m_r$budget <- scale(m_r$budget)
+m_r$score <- scale(m_r$score)
+m_r$popularity<-scale(m_r$popularity)
+m_r$profit<-scale(m_r$profit)
+m_r$vote<-scale(m_r$vote)
+
 xr=model.matrix(profit~.,m_r)[,-1]
 yr=m_r$profit
 loadPkg("glmnet")
-lambdas=10^seq(10,-4,by = -.1) # prepare log scale grid for λ values, from 10^10 to 10^-4
+lambdas=10^seq(10,-10,by = -.1) # prepare log scale grid for λ values, from 10^10 to 10^-4
 ridge.mod=glmnet(xr,yr,alpha=0,lambda=lambdas) # build the ridge model.
 dim(coef(ridge.mod)) 
 plot(ridge.mod) 
@@ -434,9 +441,9 @@ Lsse <- sum((yp - yr)^2)
 Lrsq <- 1 - Lsse / Lsst
 Lrsq
 
-lasso_coef = predict(out, type = "coefficients", s = bestlam)[1:40,] # Display coefficients using λ chosen by CV
-lasso_coef
-lasso_coef[lasso_coef!=0]
+lasso_coef = predict(out, type = "coefficients", s = bestlam)[1:39,] # Display coefficients using λ chosen by CV
+#lasso_coef
+#lasso_coef[lasso_coef!=0]
 lasso_coef[lasso_coef==0]
 ```
 
