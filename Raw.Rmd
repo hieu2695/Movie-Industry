@@ -432,34 +432,7 @@ movie_sample <- sample(2, nrow(scale_movie), replace=TRUE, prob=c(0.67, 0.33)) #
 ```
 
 
-```{r testprofit}
 
-
-xtrain0 <- scale_movie[movie_sample==1, 1:5] # train set contaning predictors
-xtest0 <- scale_movie[movie_sample==2, 1:5] # test set containing predictors
-
-
-
-ytrain0 <- movie_num_all[movie_sample==1, 7] # train set containing the response "revenue"
-ytest0 <- movie_num_all[movie_sample==2, 7] # test set containing the response "revenue"
-
-# we can combine them into an overall data frame
-train0 <- as.data.frame(cbind(profit = ytrain0,xtrain0)) 
-test0 <- as.data.frame(cbind(profit = ytest0,xtest0))
-train0$genres <- movie$genres[movie_sample == 1]
-train0$company<- movie$company[movie_sample == 1]
-train0$season <- movie$season[movie_sample == 1]
-str(train0)
-str(test0)
-rev_lm10 <- lm(profit ~ budget + popularity + runtime + vote +genres + company, data = train0) # construct the model
-summary(rev_lm10) # summary of the model
-vif(rev_lm10) # check vifs
-#movie_num_all[7]
-
-
-
-
-```
 
 
 ```{r Q22}
@@ -484,16 +457,7 @@ str(test1)
 
 
 
-```{r randomforestprofit}
 
-set.seed(123)
-rf_pro <- randomForest(profit ~., data = train0, ntree = 500, mtry = 3)
-
-rf_pro
-
-
-
-```
 
 
 
@@ -830,6 +794,8 @@ rev_tree$cptable[,"xerror"] # we can see the lowest xerror
 
 ```{r prunedtree, include = T}
 
+# choose Cp with mininum xerror and prune the tree
+rev_tree_prune <- prune(rev_tree, cp = rev_tree$cptable[8,"CP"]) 
 fancyRpartPlot(rev_tree_prune)
 
 ```
@@ -841,7 +807,7 @@ Testing
 ```{r Q43, include = T}
 
 # choose Cp with mininum xerror and prune the tree
-rev_tree_prune <- prune(rev_tree, cp = rev_tree$cptable[8,"CP"]) 
+#rev_tree_prune <- prune(rev_tree, cp = rev_tree$cptable[8,"CP"]) 
 
 
 # testing
