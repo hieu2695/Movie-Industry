@@ -242,10 +242,26 @@ movie_reg$popularity <- scale(movie_reg$popularity)
 movie_reg$runtime <- scale(movie_reg$runtime)
 movie_reg$vote <- scale(movie_reg$vote)
 #str(movie_reg)
-p.linear <- lm(profit~.,data=movie_reg)
-print(summary(p.linear))
+
+p.linear <- lm(profit~.,data=subset(movie_reg,select = -c(month)))
+#print(summary(p.linear))
+
 #coef(p.linear)
 #confint(p.linear)
+
+movie_r <- subset(movie,select = -c(title,date,genrecount,revenue,roi,profitable))
+#movie_r$budget <- scale(movie_r$budget)
+#movie_r$profit <- scale(movie_r$profit)
+#movie_r$popularity <- scale(movie_r$popularity)
+#movie_r$runtime <- scale(movie_r$runtime)
+#movie_r$vote <- scale(movie_r$vote)
+#movie_r$month <- as.factor(movie_r$month)
+
+p.l <- lm(profit~.,data=movie_r)
+str(movie_r)
+#print(summary(p.linear2))
+F1 <- data.frame(company = 'Walt Disney',genre = 'Animation',month = 11, runtime = 104 ,budget = 150000000, popularity = 165.13, score = 7.3,vote = 5295)
+predict(p.l,F1)
 ```
 
 * The first model call is `r format(summary(p.linear)$call)`.
@@ -261,6 +277,12 @@ movie_reg$month <- as.factor(movie_reg$month)
 movie_reg <- subset(movie_reg,select = -c(M2,M3,M4,M5,M6,M7,M8,M9,M10,M11,M12))
 ```
 
+```{r}
+names <- colnames(movie_reg)
+#length(names)
+names
+```
+
 ```{r modelselection}
 reg.best <- regsubsets(profit~. , data = movie_reg, nvmax = 14, nbest = 1, method = "backward")
 plot(reg.best, scale = "adjr2", main = "Adjusted R^2")
@@ -269,6 +291,18 @@ plot(reg.best, scale = "r2", main = "R^2")
 plot(reg.best, scale = "bic", main = "BIC")
 plot(reg.best, scale = "Cp", main = "Cp")
 summary(reg.best)
+```
+
+```{r Modelselection2}
+movie_r$month <- as.factor(movie_r$month)
+reg.best <- regsubsets(profit~. , data = movie_r, nvmax = 14, nbest = 1, method = "backward")
+plot(reg.best, scale = "adjr2", main = "Adjusted R^2")
+plot(reg.best, scale = "r2", main = "R^2")
+# In the "leaps" package, we can use scale=c("bic","Cp","adjr2","r2")
+plot(reg.best, scale = "bic", main = "BIC")
+plot(reg.best, scale = "Cp", main = "Cp")
+summary(reg.best)
+
 ```
 
 ```{r, warning=F, echo=F}
@@ -403,24 +437,98 @@ library(randomForest)
 set.seed(1234)
 movies_rf <- subset(movie, select = -c(title,genrecount,date,revenue,roi,profitable))
 
-regressor = randomForest(x = movies_rf[-9],
+RFregressor = randomForest(x = movies_rf[-9],
                          y = movies_rf$profit,
                          ntree = 500)
+```
 
+```{r}
+plot(RFregressor)
+```
+
+```{r}
+s <- subset(movie,title == 'Frozen')
+#mean(s)
+ss<- subset(movie,company == 'Walt Disney')
 ```
 
 ```{r prediction}
-summary(regressor)
+#summary(regressor)
 # Predicting a new result with Random Forest Regression
-Mulan <- data.frame(company = 'Walt Disney',genre = 'Animation',month = 3, runtime = 100 ,budget = 25000000, popularity = 150, score = 9.4,vote = 4566)
-levels(Mulan$company) <- regressor$forest$xlevels$company
-levels(Mulan$genre) <- regressor$forest$xlevels$genre
-Mulan_profit = predict(regressor, Mulan)
 
-Frozen2 <- data.frame(company = 'Walt Disney',genre = 'Animation',month = 11, runtime = 104 ,budget = 33000000, popularity = 150, score = 4.58,vote = 29223)
-levels(Frozen2$company) <- regressor$forest$xlevels$company
-levels(Frozen2$genre) <- regressor$forest$xlevels$genre
-Frozen2_profit = predict(regressor, Frozen2)
+Mulan <- data.frame(company = 'Walt Disney',genre = 'Animation',month = 3, runtime = 100 ,budget = 25000000, popularity = 165.13, score = 9.4,vote = 4566)
+#levels(Mulan$company) <- regressor$forest$xlevels$company
+#levels(Mulan$genre) <- regressor$forest$xlevels$genre
+#Mulan_profit = predict(regressor, Mulan)
+
+
+#Set the populartiy as same as the movie forzen's
+Frozen2a <- data.frame(company = 'Walt Disney',genre = 'Animation',month = 11, runtime = 104 ,budget = 33000000, popularity = 165.13, score = 6.79,vote = 5295)
+levels(Frozen2a$company) <- RFregressor$forest$xlevels$company
+levels(Frozen2a$genre) <- RFregressor$forest$xlevels$genre
+Frozen2_profita = predict(RFregressor, Frozen2a)
+
+Frozen <- data.frame(company = 'Walt Disney',genre = 'Animation',month = 11, runtime = 104 ,budget = 150000000, popularity = 165.13, score = 7.3,vote = 5295)
+levels(Frozen$company) <- RFregressor$forest$xlevels$company
+levels(Frozen$genre) <- RFregressor$forest$xlevels$genre
+Frozen_profit = predict(RFregressor, Frozen2)
+
+
 #651000000
 #521197933 
+
+```
+
+
+```{r}
+#summary(p.l)
+predict(p.l,Frozen)
+```
+### more regression
+```{r}
+#quantile(movie$popularity)
+#plot(sort(movie_r$runtime))
+#plot(movie_r[order(movie_r$runtime),]$profit, add = TRUE)
+
+plot(sort(movie_r$popularity))
+plot(movie_r[order(movie_r$popularity),]$profit, add = TRUE)
+```
+
+
+
+```{r Polyregrssion}
+pop.l <- lm(profit~popularity,movie_r)
+summary(pop.l)
+model <- lm(movie_r$profit ~ poly(movie_r$popularity,4))
+summary(model)
+str(movie_r)
+```
+
+```{r more}
+v <- poly(movie_r$popularity,4)
+f.model <- lm(profit ~poly(popularity,10)+poly(vote,10)+company+month+genre+poly(runtime,2)+poly(budget,3)+poly(score,6), data = movie_r)
+summary(f.model)
+```
+
+```{r svr}
+#install.packages('e1071')
+library(e1071)
+regressor = svm(formula = profit ~ .,
+                data = movie_r,
+                type = 'eps-regression',
+                kernel = 'radial')
+#summary(regressor)
+
+predictedY <- predict(regressor, movie_r)
+
+plot(predictedY)
+plot(movie_r$profit)
+```
+
+
+```{r}
+newl <- lm(profit~budget,movie_r)
+summary(newl)
+plot(subset(movie_r, select = c(budget,profit)), main ="Scatter Plot")
+abline(newl)
 ```
