@@ -1,0 +1,2499 @@
+---
+title: "DATS 6101 - Final Project"
+author: "Randomly-Generated: Tran Hieu Le, Fahim Ishrak, Zhilin Wang, Totyana Hill"
+date: "11/05/2019"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '2'
+---
+
+
+
+```{r setup, include = F}
+knitr::opts_chunk$set(echo = T, include = T, warning=F, message=F)
+options(scientific=T, digits = 3) 
+
+
+```
+
+```{r loadPkgfcn}
+loadPkg = function(x) { if (!require(x,character.only=T, quietly =T)) { install.packages(x,dep=T,repos="http://cran.us.r-project.org"); if(!require(x,character.only=T)) stop("Package not found") } }
+```
+
+
+
+
+```{r loadsomepackage}
+
+#load some packages that will be used
+loadPkg("randomForest")
+loadPkg("DMwR")
+loadPkg("ggplot2")
+loadPkg("Metrics")
+loadPkg("FNN")
+loadPkg("leaps")
+loadPkg("ISLR")
+loadPkg("tree")
+loadPkg("rpart")
+loadPkg("rpart.plot")
+loadPkg("rattle") # For fancyRpartPlot (Trees) Answer "no" on installing from binary source
+loadPkg("corrplot")
+
+
+```
+
+# Chapter 1. Introduction
+# Chapter 2. Preparation
+
+## Import data
+
+Before importing the data, we preprocessed the raw data in Python to obtain a nicer data frame as the raw data contains some columns written in JSON format with many attributes.
+
+```{r Q1, include = T}
+
+# read csv file 
+df <- read.csv("Movie.csv")
+str(df) # have a glance at the data by seeing its structure
+
+```
+
+## Data Cleanining
+
+```{r Q2}
+
+#remove na
+movie = na.omit(df)
+
+#remove duplicates
+movie <- unique(movie)
+
+#remove movies wiht no budget, no revenue, no genre, no vote, no score 
+#we can build some models and use predict function to fill the missing values, but there are not many missing values and we do not know which models are good for prediction so we just remove them
+movie <- subset(movie, !((movie$budget == 0) | (movie$revenue == 0) | (movie$Number_Genres == 0) | (movie$vote_count == 0) 
+                         | (movie$vote_average == 0) ))
+
+#str(movie)
+
+```
+
+
+
+```{r Q3}
+
+# rename column and create profit columns
+
+colnames(movie)[c(5,6,10,11,12)] = c("company","date","score","vote","genrecount") # rename some columns
+
+movie$profit = movie$revenue - movie$budget # create profit column
+
+movie$profitable <- c(0) # create profitable column which indicates whether a movie has negative or posite profit
+
+for (i in 1:nrow(movie)) {if (movie[i,"profit"] > 0) {movie[i,"profitable"] = 1} } # positive profit is labeled as 1, negative is 0
+
+movie$profitable = as.factor(movie$profitable) # make sure the profitable outputs are factors
+
+```
+
+
+
+```{r Q4}
+
+# preprocess company column
+
+movie$company = as.character(movie$company)  # change company to character for easier operation
+
+# Below is the list of studios in 5 largest parent studios in the world. 
+# I collect information from wiki and some websites
+# Although the lists may lack some minor studios, they include the majority of popular ones.
+
+warner = c("Warner Bros.", "Warner Bros. Pictures", "Warner Bros. Animation", "Warner Bros. Family Entertainment", "Warner Brothers/Seven Arts",  "New Line Cinema", "DC Comics","Castle Rock Entertainment")
+
+universal = c("Universal","Universal Pictures", "Universal Pictures Corporation", "Universal Studios", "DreamWorks", "DreamWorks Animation", "DreamWorks SKG", "Amblin Entertainment", "Working Title Films", "Focus Features", "Focus Films","Gramercy Pictures")
+
+paramount = c("Paramount Pictures", "Paramount", "Paramount Classics", "Paramount Vantage","MTV Films","Nickelodeon Movies")
+
+walt_disney = c("Walt Disney", "Walt Disney Animation Studios", "Walt Disney Pictures", "Walt Disney Productions", "Walt Disney Studios Motion Pictures", "Walt Disney Television Animation", "Buena Vista", "Touchstone Pictures", "Hollywood Pictures", "Caravan Pictures","Miramax","Miramax Films","Dimension Films","Marvel Studios", "Twentieth Century Fox Film Corporation", "Blue Sky Studios","Lucasfilm","Fox 2000 Pictures", "Fox Atomic","Fox Entertainment Group","Fox Searchlight Pictures","UTV Motion Pictures")
+
+sony = c("Columbia Pictures","Columbia Pictures Corporation", "Columnbia Pictures Industries", "Sony Pictures", "Sony Pictures Animation", "Sony Pictures Classics", "TriStar Pictures","Destination Films") 
+
+#other film companies will be saved into "Others" group
+
+```
+
+
+
+```{r Q5}
+
+# assign new values to the company column using the list of 5 largerst movie companies above
+for (i in 1:nrow(movie)) {
+  if (movie[i,"company"]%in%warner) {movie[i,"company"] = "Warner Bros"} 
+  
+  else if(movie[i,"company"]%in%universal) {movie[i,"company"] = "Universal Pictures"}
+  
+  else if(movie[i,"company"]%in%paramount) {movie[i,"company"] = "Paramount Pictures"}
+  
+  else if(movie[i,"company"]%in%walt_disney) {movie[i,"company"] = "Walt Disney"}
+  
+  else if(movie[i,"company"]%in%sony) {movie[i,"company"] = "Sony Pictures"}
+  
+  else (movie[i,"company"] = "Others") # movies which are not product of 5 biggest movie companies are saved as "Others"
+  
+} 
+
+movie$company = as.factor(movie$company) # change company column back to factor type
+
+
+```
+ 
+
+```{r Q6}
+
+genre_count = data.frame(table(movie$genres)) # count number of movies in each genre
+#genre_count # seeing the results
+
+
+
+```
+
+
+
+```{r Q7}
+
+
+# there is one record for Foreign type, we will remove it so that when we split train and test sets we do not have to deal with the levels of factor in each set. Foreign is an unpopular genre and there is only one record so it won't affect our model and analysis
+
+movie <- subset(movie, ! (movie$genres == "Foreign")) # subset movie excluding Foreign
+
+row.names(movie) <- NULL #reorder row names since after removing rows, the order is not natural
+movie$genres <- factor(as.character(movie$genres)) # reasign the levels of factor for genres
+movie$title <- factor(movie$title) # reorder title factor levels
+
+
+# conver date column to date formate as Y-m-d
+loadPkg("lubridate")
+movie$date <- as.character(movie$date)  # change the date column to character
+movie$date <- as.Date(movie$date, format = "%Y-%m-%d") # save it as date format
+
+
+str(movie)  # check the structure now
+
+
+```
+
+```{r Q8}
+
+# create a season column, at first, we save month data to it
+movie$season <- month(movie$date)
+movies <- movie
+colnames(movies)[c(15)] <- c('month')
+movie$quarter <- c(1) # create a quarter column which will be used for time series model
+
+
+# apply quarters 
+for (i in 1:nrow(movie)) {
+  if (movie[i,"season"]%in%c(1,2,3)) {movie[i,"quarter"] = "Q1"} # Quarter 1 for Jan, Feb, Mar
+  
+  else if(movie[i,"season"]%in%c(4,5,6)) {movie[i,"quarter"] = "Q2"} # Quarter 2 for April, May, June
+  
+  else if(movie[i,"season"]%in%c(7,8,9)) {movie[i,"quarter"] = "Q3"} # Quarter 3 for July, Aug, Sep
+  
+  else {movie[i,"quarter"] = "Q4"} # Quarter 4 for Oct, Nov and Dec
+  
+  
+} 
+
+# now apply season following meteorological definition
+for (i in 1:nrow(movie)) {
+  if (movie[i,"season"]%in%c(3,4,5)) {movie[i,"season"] = "Spring"} 
+  
+  else if(movie[i,"season"]%in%c(6,7,8)) {movie[i,"season"] = "Summer"}
+  
+  else if(movie[i,"season"]%in%c(9,10,11)) {movie[i,"season"] = "Fall"}
+  
+  else {movie[i,"season"] = "Winter"}
+  
+  
+} 
+
+movie$season <- as.factor(movie$season) # change the season column to factor
+movie$season <- factor(movie$season, levels = c("Spring", "Summer","Fall","Winter")) # reorder factor levels
+
+movie$quarter <- as.factor(movie$quarter) # change quarter column to factor
+
+movie$year <- year(movie$date) # create a year column which will be used for time series
+
+
+
+
+```
+
+
+```{r Q9, include = T}
+
+
+# we won't use the genrecount column and the first column X that labeled the number of movie
+# we have that X column as default index while cleaning the data using Python 
+# now, remove X column and genrecount column which are not necessary
+movie <- movie[-c(1,12)] 
+
+
+str(movie) # check the structure of our data after cleaning
+
+```
+
+## Data Summary
+
+
+```{r Q10, include = T}
+
+summary(movie) # summary of the whole data
+
+```
+
+We need to scale the data, too high difference.
+
+```{r Q11, include = T}
+
+summary(movie[c(6,1,3,7,9,10,11)]) # summary of the numerical variables
+
+```
+
+Variance and SD
+
+```{r Q12, include = T}
+
+sapply(movie[c(6,1,3,7,9,10,11)], sd) # check the sd
+sapply(movie[c(6,1,3,7,9,10,11)], var) # check the var
+
+```
+
+The means, variance and sd between variables are quite high as most of them have different scales. We need to scale the data for some models like linear regression, PCR, KNN, etc.
+
+## Data visualization
+
+Numnber of movies by company
+
+```{r Q13, include = T}
+comp_count = data.frame(table(movie$company)) #count the number of movies by company and save to a dataframe
+
+# plot the number of movies by company using ggplot()
+ggplot(comp_count, aes(x = reorder(Var1, Freq), y = Freq)) +  # order by the number of movies
+  geom_bar(stat = 'identity', fill ='gold', alpha = 0.9) + coord_flip() +
+  ylab("Number of movies") +
+  xlab("Companies") +
+  ggtitle(("Number of movies by companies")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+```
+
+
+
+Number of movie by season
+
+```{r Q14, include = T}
+
+# we plot the number of movies by season
+season_count = data.frame(table(movie$season))
+
+
+ggplot(season_count, aes(x = Var1, y = Freq, fill = Var1)) + 
+  geom_bar(stat = 'identity', alpha = 0.9) +
+  ylab("Number of movies") +
+  xlab("Season") +
+  ggtitle(("Number of movies by season")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  guides(fill=guide_legend(title = "Season"))
+
+```
+
+```{r Q15, include = T}
+
+
+# and number of movies by genre
+genres_count = data.frame(table(movie$genres))
+
+
+ggplot(genres_count, aes(x = reorder(Var1, Freq), y = Freq)) + 
+  geom_bar(stat = 'identity', fill = "dodgerblue", alpha = 0.9) + coord_flip() +
+  ylab("Number of movies") +
+  xlab("Genre") +
+  ggtitle(("Number of movies by genre")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+```
+
+
+
+
+# Chapter 3. Revenue Prediction
+
+In this section, we will try three models: Linear Regression, Decision Tree (Regression Tree since the response is continuous variable) and Random Forest. In each model, we will choose the best formula (adj R2, BIC, CP for Linear Regression, pruning for Regression Tree, tuning for Random Forest). And then we compare the three best models.
+
+## Dependency
+
+### Numerical Variables
+
+```{r Q16, include = T}
+
+loadPkg("corrplot")
+
+movie_num <- subset(movie, select = c(6,1,3,7,9,10)) # choose numerical variables excluding profit to be the data for later model
+
+movie_num_all <- data.frame(cbind(movie_num,profit=movie$profit)) # this one includes profit 
+
+#cordf_all = cor(movie_num_all)
+#corrplot(cordf_all)
+
+
+cordf =  cor(movie_num) # cor matrix
+
+corrplot(cordf) # correlation plot
+
+
+
+```
+
+* We can check the effect of categorical variables by anova test.
+
+### Genre
+
+Test frequency distributions of revenue in different genres
+
+```{r Q17}
+
+anov_genre = aov(revenue ~ genres, data = movie) # anova test for the null: the means of revenue in different genres are the same
+summary(anov_genre)
+
+
+#adhoc_genre <- TukeyHSD(anov_genre) # ad hoc proc to check which pairs of genres have different means of profit
+#adhoc_genre
+
+```
+
+Overall, there is an evidence that the frequency distributions of revenue in different genres are not the same. It seems that revenue is dependent on genres.
+
+
+### Company
+
+Check freq disbutions of revenue in different companies
+
+```{r Q18}
+
+anov_comp = aov(revenue ~ company, data = movie) # anova test for the null: the means of revenue in different companies are the same
+summary(anov_comp)
+
+
+#adhoc_comp <- TukeyHSD(anov_comp) # ad hoc to check which pairs are significant
+#adhoc_comp
+
+```
+
+Overall, there is an evidence that the frequency distributions of revenue in different companies are not the same. It seems that revenue is dependent on companies.
+
+### Season
+
+```{r Q19}
+
+anov_ss= aov(revenue ~ season, data = movie)  # anova test for the null: the means of revenue in different seasons are the same
+summary(anov_ss)
+
+adhoc_ss <- TukeyHSD(anov_ss) # check which pairs are significant
+adhoc_ss
+
+```
+
+It seems that winter - fall are in the same group and spring - summer are in the same group.
+
+
+
+### Training and testing sets
+
+```{r Q20}
+
+# scale the data since the vars and s.ds among variables are significant
+
+# every numerical variables are scaled except the response "revenue"
+scale_movie <- as.data.frame(scale(movie_num[c(2:6)], center = TRUE, scale = TRUE)) 
+
+
+str(movie_num_all)
+str(scale_movie)
+
+```
+
+
+```{r Q21}
+
+
+set.seed(1000)
+
+movie_sample <- sample(2, nrow(scale_movie), replace=TRUE, prob=c(0.67, 0.33)) #  split the data with ratio 67:33
+
+```
+
+
+
+
+
+```{r Q22}
+
+
+xtrain1 <- scale_movie[movie_sample==1, 1:5] # train set contaning predictors
+xtest1 <- scale_movie[movie_sample==2, 1:5] # test set containing predictors
+
+
+
+ytrain1 <- movie_num[movie_sample==1, 1] # train set containing the response "revenue"
+ytest1 <- movie_num[movie_sample==2, 1] # test set containing the response "revenue"
+
+# we can combine them into an overall data frame
+train1 <- as.data.frame(cbind(revenue = ytrain1,xtrain1)) 
+test1 <- as.data.frame(cbind(revenue = ytest1,xtest1))
+
+str(train1)
+str(test1)
+
+```
+
+
+
+
+
+
+
+## Linear model
+
+### Numerical Variables
+
+#### Model Construction
+
+Construct the model on training set (using all numberical variables)
+
+```{r Q23, include = T}
+
+loadPkg("faraway")
+
+rev_lm1 <- lm(revenue ~., data = train1) # construct the model
+summary(rev_lm1) # summary of the model
+vif(rev_lm1) # check vifs
+
+
+```
+
+
+Prediction
+
+Testing
+
+```{r Q24, include = T}
+
+
+# predict the model on test set
+rev_lm_test1 <- predict(object = rev_lm1, test1) # predict the model on the test set
+rev_lm_pred1 <- data.frame(cbind(actuals=test1$revenue, predicteds=rev_lm_test1)) # save the predicted and actual values in a data frame
+rev_lm_metrics1 <- regr.eval(rev_lm_pred1$actuals, rev_lm_pred1$predicteds) # calculate metrics using regr.eval() function from DMwR package
+                                                                            # return the 4 metrics (RMSE, MSE, MAE, MAPE)
+rev_lm_metrics1[c(1,3)] # show the metrics MAE and RMSE 
+
+# I consulted some websites about the use of MAPE and they have some example about the disadvantages of this metric
+# We should not use MAPE metric for comparsion between models, RMSE and MAE may be enough
+
+```
+
+Training
+
+```{r Q25, include = T}
+
+# predicted (fitted) values in train set
+#rev_lm_train1 <- rev_lm1$fitted.values
+rev_lm_train1 <- predict(object = rev_lm1)  # same results as the above code
+                                            # we do not set the new data so the predict will use the fitted values
+                                            # it will give same results if using newdata = train1
+                                            # however, the results are different when using models that ensemble multiple models such as RF
+                                            # better use the correct format by ignoring newdata augment
+                                            # same results as the code rev_lm_train1 <- rev_lm1$fitted.values 
+
+rev_lm_predtrain1 <- data.frame(cbind(actuals=train1$revenue, predicteds=rev_lm_train1)) # save predicted and actual values in a dataframe
+rev_lm_metrics_train1 <- regr.eval(rev_lm_predtrain1$actuals, rev_lm_predtrain1$predicteds) 
+rev_lm_metrics_train1[c(1,3)] # we can see that rmse of fitted values is the residual standard error
+
+
+```
+
+
+
+#### Feature selection
+
+```{r Q26, include = T}
+
+reg.lm <- regsubsets(revenue~., data = train1, nbest = 1, method = "exhaustive")  # leaps, exhaustive method
+plot(reg.lm, scale = "adjr2", main = "Adjusted R^2")
+plot(reg.lm, scale = "bic", main = "BIC") 
+plot(reg.lm, scale = "Cp", main = "Cp")
+
+#summary(reg.lm)
+
+```
+
+
+All three feature selection methods show that predictors (budget + popularity + vote) form the best model.
+
+#### Best Model
+
+Construct the model on train set
+
+```{r Q27, include = T}
+
+
+rev_lm2 <- lm(revenue ~ budget + popularity + vote, data = train1) # models with budget + popularity + vote
+summary(rev_lm2)
+vif(rev_lm2)
+
+```
+
+Prediction
+
+```{r Q28, include = T}
+
+
+rev_lm_test2 <- predict(object = rev_lm2, test1) # prediction on test set
+rev_lm_pred2 <- data.frame(cbind(actuals=test1$revenue, predicteds=rev_lm_test1)) 
+rev_lm_metrics2 <- regr.eval(rev_lm_pred2$actuals, rev_lm_pred2$predicteds) # metrics
+rev_lm_metrics2[c(1,3)] # show the metrics 
+
+```
+
+
+```{r Q29, include = T}
+
+rev_lm_train2 <- predict(object = rev_lm2) # predicted values on train set
+rev_lm_predtrain2 <- data.frame(cbind(actuals=train1$revenue, predicteds=rev_lm_train1))
+rev_lm_metrics_train2 <- regr.eval(rev_lm_predtrain2$actuals, rev_lm_predtrain2$predicteds) # metrics
+rev_lm_metrics_train2[c(1,3)] # show the metrics 
+
+```
+
+No change when comparing to the model containing all numerical variables. We can remove unnecessary variables without reducing Adjusted R-squared or increasing RMSE. The best model is less complex and can avoid overfitting due to many predictors (high dimensionality).
+
+### Categorical and Numerical Variables
+
+```{r 30}
+
+# include the genres, company and season variables to the train and test sets
+
+train1_full <- train1 # duplicate the train set as we want to keep the two train sets separately
+train1_full$genres <- movie[movie_sample==1, 1:14]$genres # append genres to the train set
+train1_full$company <- movie[movie_sample==1, 1:14]$company # append the company to the train set
+train1_full$season <- movie[movie_sample==1, 1:14]$season # append season
+
+
+# we do the same with test set
+test1_full <- test1
+test1_full$genres <- movie[movie_sample==2, 1:14]$genres
+test1_full$company <- movie[movie_sample==2, 1:14]$company
+test1_full$season <- movie[movie_sample==2, 1:14]$season
+
+str(train1_full)
+str(test1_full)
+
+```
+
+
+#### Model Construction
+
+```{r Q31, include = T}
+rev_lm4 <- lm(revenue ~., data = train1_full)
+summary(rev_lm4)
+vif(rev_lm4)
+
+```
+
+The p-values and t-values indicate that there is no significance among seasons. Season seems not to be a necessary predictor.
+
+#### Feature Selection
+
+```{r Q32, include = T}
+reg.lm1 <- regsubsets(revenue~., data = train1_full, nbest = 1, method = "exhaustive")  # leaps, exhaustive method
+plot(reg.lm1, scale = "adjr2", main = "Adjusted R^2")
+plot(reg.lm1, scale = "bic", main = "BIC") 
+plot(reg.lm1, scale = "Cp", main = "Cp")
+
+```
+
+
+
+When inlcuding the season, genre and company in the model, the best numerical predictors are still budget, popularity and vote. The effects of different seasons seem not to be significant. 
+We will build the model with these 3 numerical predictors and 2 categorical variables: genre and company.
+
+#### Best Model
+
+```{r Q33, include = T}
+  
+
+rev_lm3 <- lm(revenue ~ budget + vote + company + genres + popularity , data = train1_full)
+summary(rev_lm3)
+vif(rev_lm3)
+
+
+```
+
+The adj R-squared increases by 1.0% comparing to the the best model with numerical variables.
+
+#### Prediction
+
+Testing
+
+```{r Q34, include = T}
+
+#loadPkg("MLmetrics")
+
+rev_lm_test3 <- predict(object = rev_lm3, newdata = test1_full) # prediction on test set
+rev_lm_predtest3 <- data.frame(cbind(actuals=test1_full$revenue, predicteds=rev_lm_test3))
+rev_lm_metrics_test3 <- regr.eval(rev_lm_predtest3$actuals, rev_lm_predtest3$predicteds) # metrics (RMSE, MAE, MSE, MAPE)
+rev_lm_metrics_test3[c(1,3)] # show the metrics
+
+```
+
+Training
+
+```{r Q35, include = T}
+
+rev_lm_train3 <- predict(object = rev_lm3) # predicted values in train set
+rev_lm_predtrain3 <- data.frame(cbind(actuals=train1_full$revenue, predicteds=rev_lm_train3))
+rev_lm_metrics_train3 <- regr.eval(rev_lm_predtrain3$actuals, rev_lm_predtrain3$predicteds) # metrics (RMSE, MAE, MSE, MAPE)
+options(scientific=T, digits = 2) # to make the format of metrics the same as above metrics (as Xe+07)
+rev_lm_metrics_train3[c(1,3)]
+options(scientific=T, digits = 3) # change back to our default format
+
+
+```
+
+A slight improvement in this model. Adj R-squared increase by 1% and RMSE in both training set and testing set slightly decrease.
+
+```{r Q36}
+
+
+AIC(object=rev_lm2) # best model with budget + popularity + vote
+BIC(object=rev_lm2)
+
+cat("\n")
+AIC(object=rev_lm3) # best model including genres and company
+BIC(object=rev_lm3)
+```
+
+Model 1: budget + vote + popularity 
+Model 2: budget + vote + popularity + company + genres
+
+
+Model 1 has higher AIC than Model 2, which indicates that Model 2 is better for predicting the revenue. 
+Model 1 has lower BIC than Model 2, which indicates that Model 1 is better as a true function to explain the revenue. (BIC prefers simple models)
+
+## Regression Tree
+
+With Decision Tree we can address both numerical and categorical variables in the model. We perform the prediction of revenue (a continuous response) so we use regression tree.
+
+### Tree Construction
+
+#### Model Construction
+
+We can try two functions to build a regression tree model
+
+```{r Q37, include = T}
+
+
+rev_tree0 <- tree(revenue ~ ., data=train1_full) # use tree function
+summary(rev_tree0)
+plot(rev_tree0) 
+text(rev_tree0,cex=0.7)
+
+```
+```{r Q37.1, include = T}
+
+
+rev_tree <- rpart(revenue ~ ., method ="anova", data=train1_full) #use rpart with method = "anova"
+#plotcp(rev_tree ) # visualize cross-validation results 
+summary(rev_tree ) # detailed summary of splits
+#printcp(rev_tree ) # display the results 
+
+
+```
+
+
+```{r Q38, include = T}
+
+rev_tree.rsq = 1 - printcp(rev_tree)[9,3] # we can calculate R-quared using equation: R-squared = 1 - rel error
+                                          # I see this equation in stackoverflow.com
+                                          # I'm not sure if it is 100% correct
+                                          
+
+```
+
+```{r Q39, include = T}
+
+# visualize the tree using 2 methods prp() and fancyRpartPlot()
+prp(rev_tree, main = "Classification Trees for Revenue")
+fancyRpartPlot(rev_tree)
+
+
+```
+
+2 methods give the same tree. rpart() gives access to nicer plots.
+
+#### Prediction
+
+Testing
+
+```{r Q40, include = T}
+
+
+rev_tree_pred.test <- predict(rev_tree, newdata = test1_full)
+actual_pred_tree.test <- as.data.frame(cbind(actuals = test1_full$revenue, predicteds = rev_tree_pred.test))
+metrics_test_tree <- regr.eval(actual_pred_tree.test$actuals, actual_pred_tree.test$predicteds)
+metrics_test_tree[c(1,3)]
+
+```
+
+Training
+
+```{r Q41, include = T}
+
+
+rev_tree_pred.train <- predict(rev_tree, train1_full)
+actual_pred_tree.train <- as.data.frame(cbind(actuals = train1_full$revenue, predicteds = rev_tree_pred.train))
+metrics_train_tree <- regr.eval(actual_pred_tree.train$actuals, actual_pred_tree.train$predicteds)
+metrics_train_tree[c(1,3)]
+
+
+```
+
+The results seem to be worse than linear models.
+
+### Pruned Tree
+
+#### Pruning
+
+We can see the error for each Cp.
+
+```{r Q42, include = T}
+
+
+printcp(rev_tree)
+plotcp(rev_tree) # visualize cross-validation results 
+
+
+# prune the tree for optimization and avoid overfitting
+
+
+rev_tree$cptable[,"xerror"] # we can see the lowest xerror
+
+
+
+```
+ The error is lowest at CP = 8. 
+ 
+
+```{r prunedtree, include = T}
+
+# choose Cp with mininum xerror and prune the tree
+rev_tree_prune <- prune(rev_tree, cp = rev_tree$cptable[8,"CP"]) 
+fancyRpartPlot(rev_tree_prune)
+
+```
+
+#### Prediction
+
+Testing
+
+```{r Q43, include = T}
+
+# choose Cp with mininum xerror and prune the tree
+#rev_tree_prune <- prune(rev_tree, cp = rev_tree$cptable[8,"CP"]) 
+
+
+# testing
+rev_tree_pred.test <- predict(rev_tree_prune, newdata = test1_full)
+actual_pred_tree.test <- as.data.frame(cbind(actuals = test1_full$revenue, predicteds = rev_tree_pred.test))
+metrics_test_tree <- regr.eval(actual_pred_tree.test$actuals, actual_pred_tree.test$predicteds)
+metrics_test_tree[c(1,3)]
+
+```
+
+Training
+
+```{r Q44, include = T}
+
+# training
+rev_tree_pred.train <- predict(rev_tree_prune)
+actual_pred_tree.train <- as.data.frame(cbind(actuals = train1_full$revenue, predicteds = rev_tree_pred.train))
+metrics_train_tree <- regr.eval(actual_pred_tree.train$actuals, actual_pred_tree.train$predicteds)
+metrics_train_tree[c(1,3)]
+# we can see the results are the same as in the original tree
+
+```
+
+There are not significant changes in the results.
+
+
+## Random Forest
+
+### Random Forest Model
+
+The data contains many variables. Furthermore, we are predicting a testing data using the model constructed on training set. Therefore, Random Forest (RF) would be better than Decision Tree (which prefers fewer variables and predicts within the sample/training data).
+
+#### Model Construction
+
+```{r Q45, include = T}
+
+set.seed(123) # set.seed to make sure the selection of tree samples are the same if we re-run the code
+
+rev_rf = randomForest(revenue~. , train1_full, ntree = 350) # construct RF model on training data, we set the number of trees as 350
+
+rev_rf # the results of the model
+randomForest::importance(rev_rf) # the importance of each predictor
+
+```
+ 
+Budget + popularity + score have highest importances. In our best linear model, the selected numerical variables are also the same as Random Forest. Two models seem to have an agreement. 
+
+There is a difference when accommodating categorical variables. Linear Model does not select runtime but selects company and genres to be added, while in Random Forest model runtime is more importanct than company. In this case, both models seem to agree on the genres variable only.
+
+#### MSE by the number of trees
+
+```{r Q46, include = T}
+
+plot(rev_rf)
+#rev_rf$mse
+
+```
+
+When the number of trees increase, the mean squared error MSE decease. After a number of trees (around 100 trees in our case), the MSE does not have any significant change.
+
+
+Testing
+
+```{r Q47, include = T}
+
+# predicting the model on the testing data
+rev_rf.test <- predict(rev_rf, test1_full) 
+actual_pred_rf.test <- as.data.frame(cbind(actuals = test1_full$revenue, predicteds = rev_rf.test))
+metrics_test_rf  <- regr.eval(actual_pred_rf.test$actuals, actual_pred_rf.test$predicteds)
+options(scientific=T, digits = 2) # to make the format of metrics the same as above metrics (as Xe+07)
+
+metrics_test_rf[c(1,3)]
+options(scientific=T, digits = 3) # change back to our default format
+
+```
+
+Training
+
+```{r Q48, include = T}
+
+#rev_rf$predicted
+rev_rf.train <- predict(rev_rf) # same results as rev_rf$predicted, both codes return the predicted values in the training set
+actual_pred_rf.train <- as.data.frame(cbind(actuals = train1_full$revenue, predicteds = rev_rf.train))
+metrics_train_rf <- regr.eval(actual_pred_rf.train$actuals, actual_pred_rf.train$predicteds)
+options(scientific=T, digits = 2) # to make the format of metrics the same as above metrics (as Xe+07)
+
+
+metrics_train_rf[c(1,3)]
+
+options(scientific=T, digits = 3) # change back to our default format
+
+```
+
+Random Forest has lower RMSEs and MAEs than Linear Model.
+
+The pseudo R-squared of RF is slightly higher than Adj R-squared of Linear Model.
+
+### Hyperparameter Tuning 
+
+Let's look if we can make our RF model better by using tuning method.
+
+```{r Q49, include = T}
+
+# there is a parameter called mtry which is used to tune a random forest model
+
+# we use tuneRF() function to train different models with different mtry and see which mtry gives lowest OOB (Out-Of-Bag) Error
+set.seed(123)              
+tune.rf <- tuneRF(x = train1_full[-c(1)], y = train1_full$revenue, ntreeTry = 350)
+               
+best_mtry <- tune.rf[,"mtry"][which.min(tune.rf[,"OOBError"])] # retrieve the mtry with lowest OOB error
+
+#best_mtry # show the best mtry value
+
+```
+
+mtry giving lowest OOB Error is 4. Now, let's build a RF model with mtry = 4.
+
+### Tuned RF model
+
+#### Model Construction
+
+```{r Q50, include = T}
+
+
+set.seed(123) # set.seed to make sure the selection of tree samples are the same if we re-run the code
+rev_rf.tune = randomForest(revenue~. , train1_full, mtry = 4, ntree = 350)
+rev_rf.tune
+
+
+```
+
+An improvement in pseudo R-squared. %Var explained increases by 1%. 
+
+#### Prediction
+
+
+Testing
+
+```{r Q51, include = T}
+
+# predicting the model on the testing data
+rev_rf.test1 <- predict(rev_rf.tune, test1_full) 
+actual_pred_rf.test1 <- as.data.frame(cbind(actuals = test1_full$revenue, predicteds = rev_rf.test1))
+metrics_test_rf1  <- regr.eval(actual_pred_rf.test1$actuals, actual_pred_rf.test1$predicteds)
+
+options(scientific=T, digits = 2) # change format for easier comparison with metrics from previous model
+metrics_test_rf1[c(1,3)]
+
+```
+
+
+
+Training
+
+```{r Q52, include = T}
+
+#rev_rf.tune$predicted
+rev_rf.train1 <- predict(rev_rf.tune) # same results as rev_rf.tune$predicted, both codes return the predicted values in the training set
+actual_pred_rf.train1 <- as.data.frame(cbind(actuals = train1_full$revenue, predicteds = rev_rf.train1))
+metrics_train_rf1 <- regr.eval(actual_pred_rf.train1$actuals, actual_pred_rf.train1$predicteds)
+metrics_train_rf1[c(1,3)]
+
+options(scientific=T, digits = 3) # change back to our initial format
+```
+
+We can see the decreases in MAE and RMSE after tuning the forest.
+
+
+## Conclusion
+
+Model| Linear Model (budget + vote + popularity + company + genres) | Regression Tree | Random Forest |
+---|---|---|---|
+R-squared(adjusted/ pseudo)| `r summary(rev_lm3)$adj.r.squared`| `r rev_tree.rsq` | `r rev_rf.tune$rsq[350]`|
+MAE - train| `r format(rev_lm_metrics_train3[c(1)], digits = 2)`| `r format(metrics_train_tree[c(1)], digits = 2)`| `r format(metrics_train_rf1[c(1)], digits = 2)`|
+MAE - test| `r format(rev_lm_metrics_test3[c(1)], digits = 2)`| `r format(metrics_test_tree[c(1)], digits = 2)`| `r format(metrics_test_rf1[c(1)], digits = 2)`|
+RMSE - train| `r format(rev_lm_metrics_train3[c(3)], digits = 2)`| `r format(metrics_train_tree[c(3)], digits = 2)`| `r format(metrics_train_rf1[c(3)], digits = 2)`|
+RMSE - test| `r format(rev_lm_metrics_test3[c(3)], digits = 2)`| `r format(metrics_test_tree[c(3)], digits =2)`| `r format(metrics_test_rf1[c(3)], digits = 2)`|
+
+Random Forest has the best performance among three models. There is no potential overfitting as well.
+
+# Chapter 4. Profit Prediction
+## Correlation
+
+```{r, include = T}
+str(movies)
+```
+
+```{r corr,include = T}
+
+movies_reg <- subset(movies, select = - c(X,title,date,genres,genrecount,company,revenue,profitable,month))
+c <- cor(movies_reg)
+corrplot(c, method = "square")
+```
+
+We get that budget, popularity and vote have relatively strong correlations with profit. While runtime and score have moderate correlation. And the correlation between profit and month is really weak.
+
+```{r OneHotCodingMonth, include = T}
+M = factor(movies$month) 
+dummm = as.data.frame(model.matrix(~M)[,-1])
+movie_M = cbind(movie, dummm) 
+movies_c <- subset(movie_M, select = c(profit,M2,M3,M4,M6,M6,M7,M8,M9,M10,M11,M12))
+
+cc <- cor(movies_c)
+corrplot(cc, method = "square")
+#str(movie_M)
+```
+
+* Month is not correlated with profit, but we do observe that month six (June) has relatively positive effect on profit, whereas month nine (september) has relatively negative effect on profit.  
+
+```{r OneHotCodingCompany,incldeu = T}
+
+library(data.table)
+#apply one hot coding on the company
+FactoredVariable = factor(movie_M$company) 
+dumm = as.data.frame(model.matrix(~FactoredVariable)[,-1])
+movie_OH = cbind(movie_M, dumm) 
+#Rename the colume name
+names(movie_OH)[names(movie_OH) == 'FactoredVariableParamount Pictures'] <- 'Paramount'
+names(movie_OH)[names(movie_OH) == 'FactoredVariableSony Pictures'] <- 'Sony'
+names(movie_OH)[names(movie_OH) == 'FactoredVariableUniversal Pictures'] <- 'Universal'
+names(movie_OH)[names(movie_OH) == 'FactoredVariableWalt Disney'] <- 'Disney'
+names(movie_OH)[names(movie_OH) == 'FactoredVariableWarner Bros'] <- 'Warner Bro'
+#
+movies_cor <- subset(movie_OH, select = c(profit,Paramount,Sony,Universal,Disney,`Warner Bro`))
+c <- cor(movies_cor)
+print(c)
+```
+
+* For each company we create a new column under the name of that company and mark 0 or 1 depending on if the movie is of that company. By the correlations between different companies with profit, we get that they are all dependent with profit.
+
+```{r OneHotCodingGenre,include = T}
+G = factor(movie_OH$genres) 
+dumm = as.data.frame(model.matrix(~G)[,-1])
+movie_OH = cbind(movie_OH, dumm)
+#str(movie_OH)
+```
+
+* For each genre we create a new column under the name of that genre and mark 0 or 1 depending on if the movie is of that genre. By the correlations between different genres with profit, we get that they are all dependent with profit.
+
+## Linear Regression
+
+### Initial Model
+
+```{r linearregression, echo=FALSE}
+movie_r <- subset(movies,select = c(profit,budget,popularity,runtime,vote,genres,month,score,company))
+movie_r$budget <- scale(movie_r$budget)
+movie_r$profit <- scale(movie_r$profit)
+movie_r$popularity <- scale(movie_r$popularity)
+movie_r$runtime <- scale(movie_r$runtime)
+movie_r$vote <- scale(movie_r$vote)
+movie_r$month <- as.factor(movie_r$month)
+
+p.linear <- lm(profit~.,data=movie_r)
+print(summary(p.linear))
+```
+
+* The first model call is `r format(summary(p.linear)$call)`.
+* By the result of our initial linear regression model on profit, we get that it is unlikely we will observe a relationship between some of the __predictors__ (like company universal, company disney, genre adventure, genre animation) and the __response__ (profit)
+
+### Model Selection
+
+```{r}
+loadPkg("leaps")
+loadPkg("ISLR")
+#This is essentially best fit 
+
+```
+
+```{r modelselection}
+reg.best <- regsubsets(profit~. , data = movie_r, nvmax = 14, nbest = 1, method = "backward")
+plot(reg.best, scale = "adjr2", main = "Adjusted R^2")
+plot(reg.best, scale = "r2", main = "R^2")
+# In the "leaps" package, we can use scale=c("bic","Cp","adjr2","r2")
+plot(reg.best, scale = "bic", main = "BIC")
+plot(reg.best, scale = "Cp", main = "Cp")
+summary(reg.best)
+```
+
+```{r Modelselection2}
+movie_r$month <- as.factor(movie_r$month)
+reg.best <- regsubsets(profit~. , data = movie_r, nvmax = 14, nbest = 1, method = "backward")
+plot(reg.best, scale = "adjr2", main = "Adjusted R^2")
+plot(reg.best, scale = "r2", main = "R^2")
+# In the "leaps" package, we can use scale=c("bic","Cp","adjr2","r2")
+plot(reg.best, scale = "bic", main = "BIC")
+plot(reg.best, scale = "Cp", main = "Cp")
+summary(reg.best)
+```
+
+```{r, warning=F, echo=F}
+loadPkg("car")
+summaryRegForward = summary(reg.best)
+# Adjusted R2
+subsets(reg.best, statistic="adjr2", legend = FALSE, main = "Adjusted R^2")
+# Mallow Cp
+res.legend <- subsets(reg.best, statistic="cp", legend = FALSE , main = "Mallow Cp")
+# this output gives the list of variables and their abbreviations
+```
+
+According to the plots above, we know that predictors (budget, vote, month5, month6,month12, genre Animation, and genre family) form the best model.
+
+### Other linear models
+
+```{r split, echo = F}
+#str(movie_OH)
+movie_OH$budget <- scale(movie_OH$budget)
+movie_OH$profit <- scale(movie_OH$profit)
+movie_OH$popularity <- scale(movie_OH$popularity)
+movie_OH$runtime <- scale(movie_OH$runtime)
+movie_OH$vote <- scale(movie_OH$vote)
+
+p.linear2 <- lm(profit~budget+vote+M5+M6+M12+GAnimation+GFamily,data=movie_OH)
+summary(p.linear2)
+```
+
+* With r-square equal to 0.591, 59.10% of profit can be explained by the 7 features above, like the movie budget, wheather the movie is release in May, June or Decemenber. The accuracy of the new model is close to the original one. We can reduce the number of variables to 7.
+With the 7 features above, we are likely to achieve the model with similar level of fitness compared to the original linear regression model.
+
+## Ridge regression
+
+```{r, echo = F, warning = F}
+#get a new movie dataset for ridge regression and scale it
+m_r <- subset(movies,select = c(company,month,genres,popularity,vote,score,budget,profit))
+m_r$month <- as.factor(m_r$month)
+m_r$budget <- scale(m_r$budget)
+m_r$score <- scale(m_r$score)
+m_r$popularity<-scale(m_r$popularity)
+m_r$profit<-scale(m_r$profit)
+m_r$vote<-scale(m_r$vote)
+
+#split the independent and dependent variables
+xr=model.matrix(profit~.,m_r)[,-1]
+yr=m_r$profit
+loadPkg("glmnet")
+#set the lambdas grid
+lambdas=10^seq(10,-10,by = -.1) # prepare log scale grid for λ values, from 10^10 to 10^-4
+ridge.mod=glmnet(xr,yr,alpha=0,lambda=lambdas) # build the ridge model.
+#get the dimension of the model
+dim(coef(ridge.mod)) 
+#plot the coefficient
+plot(ridge.mod) 
+#get the fit model
+fit <- ridge.mod$lambda
+#summary(fit)
+```
+
+* The glmnet( ) function creates 201 models, with our choice of 201 $\lambda$ values. Each model coefficients are stored in the object we named: ridge.mod  
+* There are 38 coefficients for each model. The 141 $\lambda$ values are chosen from $10^{-4}$ to $10^{10}$, essentially covering the ordinary least square model ($\lambda$ = 0), and the null/constant 
+model ($\lambda$ approach infinity).
+
+
+```{r ridge, echo = F}
+cv_fit <- cv.glmnet(xr, yr, alpha = 0, lambda = lambdas)
+plot(cv_fit)
+```
+
+```{r getbestlam, include =F}
+bestlam = cv_fit$lambda.min  # Select lamda that minimizes training MSE
+bestlam
+
+fit<-cv_fit$glmnet.fit
+y_predicted <- predict(fit, s = bestlam, newx = xr)
+# Sum of Squares Total and Error
+sst <- sum((yr - mean(yr))^2)
+sse <- sum((y_predicted - yr)^2)
+# R squared
+rsq <- 1 - sse / sst
+rsq
+```
+
+* We try to find a value for lambda that is optimal. And it turns that the best lambda value is `r bestlam`.
+
+* With lambda equal to `r bestlam`, we have the r square to be `r rsq`, which is slightly better than the linear model we have. Since the best lambda value is close to 0, the original linear regression model is not overfit.
+
+```{r, echo = F}
+ridge.mod$lambda[100] # 1.26
+coef(ridge.mod)[,100]
+sqrt(sum(coef(ridge.mod)[-1,100]^2)) # 0.55
+ridge.mod$lambda[100] # 1.26
+coef(ridge.mod)[,100] 
+sqrt(sum(coef(ridge.mod)[-1,200]^2))  # 1.14
+```
+
+
+## Lasso Regression
+
+#### Split train and test sets
+
+```{r, include = F}
+loadPkg("dplyr")
+set.seed(1)
+train = movie_r %>% sample_frac(0.5)
+test = movie_r %>% setdiff(train)
+
+x_train = model.matrix(profit~., train)[,-1]
+x_test = model.matrix(profit~., test)[,-1]
+
+y_train = train %>% select(profit) %>% unlist() # %>% as.numeric()
+y_test = test %>% select(profit) %>% unlist() # %>% as.numeric()
+```
+
+#### Build the model
+```{r, echo = F}
+lasso.mod=glmnet(x_train,y_train,alpha=1,lambda=lambdas)
+plot(lasso.mod)
+set.seed(1)
+cv.out=cv.glmnet(x_train,y_train,alpha=1)
+plot(cv.out)
+
+```
+
+```{r, echo = F}
+#mean((lasso.pred-y_test)^2)
+out = cv.glmnet(xr, yr, alpha = 1,lambda = lambdas)# Fit lasso model on full dataset
+bl <- out$lambda.min
+#lasso.pred=predict(out,s=bl,newx=xr)
+yp <- predict(out, s = bl, newx = xr)
+# Sum of Squares Total and Error
+Lsst <- sum((yr - mean(yr))^2)
+Lsse <- sum((yp - yr)^2)
+# R squared
+Lrsq <- 1 - Lsse / Lsst
+Lrsq
+
+lasso_coef = predict(out, type = "coefficients", s = bl)[1:38,] # Display coefficients using λ chosen by CV
+#lasso_coef
+#lasso_coef[lasso_coef!=0]
+lasso_coef[lasso_coef==0]
+```
+
+Here, we see that the lowest MSE is when $\lambda$ appro = . It has 31 non-zero coefficients. 
+
+
+
+## Random Forest Regression
+```{r}
+#str(movies_rf)
+# install.packages('caTools')
+library(caTools)
+movie_RF <- subset(movies,select = c(company,genres,month,runtime,budget,popularity,score,vote))
+set.seed(123)
+split = sample.split(movie_RF, SplitRatio = 0.8)
+training_set = subset(movie_RF, split == TRUE)
+test_set = subset(movie_RF, split == FALSE)
+
+RFR = randomForest(x = movie_RF,
+                         y = movie$profit,
+                         ntree = 500)
+print(RFR)
+```
+
+The random forest regression model has the highest r-squared value: 0.639 with 500 trees.
+
+```{r}
+plot(RFR)
+```
+
+It turns out that 500 hundred trees is enough to build the model.
+
+```{r prediction}
+#summary(regressor)
+# Predicting a new result with Random Forest Regression
+
+Mulan <- data.frame(company = 'Walt Disney',genres = 'Animation',month = 3, runtime = 100 ,budget = 25000000, popularity = 165.13, score = 9.4,vote = 4566)
+#levels(Mulan$company) <- regressor$forest$xlevels$company
+#levels(Mulan$genre) <- regressor$forest$xlevels$genre
+#Mulan_profit = predict(regressor, Mulan)
+
+
+#Set the populartiy as same as the movie forzen's
+Frozen2a <- data.frame(company = 'Walt Disney',genres = 'Animation',month = 11, runtime = 104 ,budget = 33000000, popularity = 165.13, score = 6.79,vote = 5295)
+levels(Frozen2a$company) <- RFR$forest$xlevels$company
+levels(Frozen2a$genres) <- RFR$forest$xlevels$genres
+Frozen2_profita = predict(RFR, Frozen2a)
+
+Frozen <- data.frame(company = 'Walt Disney',genres = 'Animation',month = 11, runtime = 104 ,budget = 150000000, popularity = 165.13, score = 7.3,vote = 5295)
+levels(Frozen$company) <- RFR$forest$xlevels$company
+levels(Frozen$genres) <- RFR$forest$xlevels$genres
+Frozen_profit = predict(RFR, Frozen)
+
+```
+
+
+# Chapter 5. PCA
+
+We want to examine if Principal Component Analysis method is good at dimensional reduction. In our data, we have 5 continuous variables to predict the revenue. We will perform principal component regression directly and see how many components are sufficient for the model.
+
+In this part, we will also clarify the reason to scale our data in previous chapter by comparing two PCR models of different versions: centered data and non-centered data.
+
+```{r PCA_PCR_xform_fcns}
+
+PCAxform <- function(df, z=TRUE) { 
+  #' Obtain the dataframe with the Principal Components after the rotation. 
+  #' ELo 201903 GWU DATS
+  #' @param df The dataframe.
+  #' @param z T/F or 0/1 for z-score to be used
+  #' @return The transformed dataframe.
+  #' @examples
+  #' tmp = PCAxform(USArrests,TRUE)
+
+  z = ifelse(z==TRUE || z=="true" || z=="True" || z=="T" || z=="t" || z==1 || z=="1", TRUE, FALSE) # standardize z 
+  if(z) { df = data.frame(scale(df))}  # scale not safe for non-numeric colunms, but PCA requires all variables numerics to begin with.
+  nmax = length(df)
+  pr.out = prcomp(df,scale=z)
+  df1 = data.frame()
+  cnames = c()
+  for( i in 1:nmax ) {
+    vec = 0
+    cnames = c( cnames, paste("PC",i, sep="") )
+    for( j in 1:nmax ) { vec = vec + pr.out$rotation[j,i]*df[,j] }
+    if( length(df1)>0 ) { df1 = data.frame(df1,vec) } else { df1 = data.frame(vec) }
+    }
+  colnames(df1) <- cnames
+  return(df1)
+}
+
+
+# To-be-implemented: for z=TRUE, it will be better to have the z-scaling option for x-vars and y separately. It is actually convenient keep y in original units.
+PCRxform <- function(df, y, zX=TRUE, zy=FALSE) { 
+  #' Obtain the dataframe with the Principal Components after the rotation for PCRegression. Requires related function PCAxform()
+  #' ELo 201903 GWU DATS
+  #' @param df The dataframe.
+  #' @param y The y-variable column index number(int), or the name of y-variable
+  #' @param zX T/F or 0/1 for z-score used on X-variables
+  #' @param zy T/F or 0/1 for z-score used on the target y-variable
+  #' @return The transformed dataframe.
+  #' @examples
+ 
+
+  # take care of y target
+  zy = ifelse(zy==TRUE || zy=="true" || zy=="True" || zy=="T" || zy=="t" || zy==1 || zy=="1", TRUE, FALSE) # standardize target y
+  if( is.integer(y) ) { # y is integer
+    if( y>length(df) || y<1 ) {
+      print("Invalid column number")
+      return(NULL)
+    }
+    if(zy) { df1 = data.frame( scale(df[y]) ) } else { df1 = df[y] } # save y-var in df1
+    df = df[-y] # remove y-variable in df
+  } else { # y is not integer, so interpret as name
+    if(zy) { df1 = data.frame( scale( df[names(df) == y] ) ) } else { df1 = df[names(df) == y] }
+    df = df[names(df) != y] # remove y-variable in df
+  }
+  if( length(df1)<1 ) {
+    print("Variable name not found in data.frame")
+    return(NULL)
+  }
+  # now transform X-vars
+  zX = ifelse(zX==TRUE || zX=="true" || zX=="True" || zX=="T" || zX=="t" || zX==1 || zX=="1", TRUE, FALSE) # standardize X-vars 
+  df2 = PCAxform(df,zX)
+  df1 = data.frame(df1,df2) # piece them back together
+  return(df1)
+}
+
+```
+
+
+## Variance
+
+```{r Q53}
+loadPkg("pls")
+loadPkg("mice")
+#loadPkg("ISLR")
+
+
+pr = prcomp(movie_num[c(1:6)] , scale =FALSE)
+pr_scale = prcomp(movie_num[c(1:6)], scale =TRUE)
+
+```
+
+We will also include revenue when checking variance. 
+
+Non-centered data
+
+```{r Q54, include  = T}
+
+
+summary(pr)
+#pr$rotation
+```
+
+Centered data
+
+```{r Q55, include = T}
+summary(pr_scale)
+#pr_scale$rotation
+
+```
+
+We see a significant differences in the variances and standard deviations of different components. Actually, the revenue and our predictors except budget are measured by different scales. And, the revenue and budget are measured in millions which are significantly bigger than the scales of vote, score, popularity ...
+
+Therefore, we recommend to scale the data before constructing the model. We will see the differences between non-centered and centered data in the following models.
+
+
+## PVE
+
+
+```{r Q56, include = T}
+
+pr.var <- (pr$sdev^2)
+pve <- pr.var/sum(pr.var)
+plot(cumsum(pve), xlab="Principal Component (standardized)", ylab ="Cumulative Proportion of Variance Explained",ylim=c(0,1),type="b", main ="Non-centered version")
+pr_scale.var <- (pr_scale$sdev^2)
+pve_scale  <- pr_scale.var/sum(pr_scale.var)
+plot(cumsum(pve_scale), xlab="Principal Component (non-standardized)", ylab ="Cumulative Proportion of Variance Explained",ylim=c(0,1),type="b", main ="Centered version")
+
+
+```
+
+In non-centered version, 1 component explains almost 100% of the variance. 
+In centered version, 1 component only explains about 50% of the variance. To reach 80%, we need 3 components.
+Another evidence to indicate that we should perform scaling since the the revenue and budget seem to overwhelm the components in non-centered version, causing the PC1 to capture nearly the entire variance.
+
+## Model with PCA
+
+
+```{r Q57}
+
+# we used the train and test sets in linear regression model
+# at first we use the PCRxform function (Prof. EL) to scale and rotate
+
+# training set
+# we do not scale the response revenue but scale all predictors
+movie_pcr = PCRxform(train1[c(1:6)],"revenue",TRUE,FALSE)  # scaled predictors
+#movie_pcr
+
+# testing set
+movie_pcr_test = PCRxform(test1[c(1:6)],"revenue",TRUE,FALSE) 
+#movie_pcr_test
+
+
+# non-centered version, nothing is scaled
+movie_pcr.nc = PCRxform(train1[c(1:6)],"revenue",FALSE, FALSE)  # non-scaled predictors
+#movie_pcr.nc
+
+
+movie_pcr.nc_test = PCRxform(test1[c(1:6)],"revenue",FALSE, FALSE) 
+#movie_pcr.nc_test
+
+```
+
+
+### PCR Model
+
+
+```{r Q58, include = T}
+
+
+# scaled data
+pcr.fit <- pcr(revenue~.,data=movie_pcr,scale=FALSE,validation="CV") # build the model, as we scaled data before we use scale = F here 
+
+# non-scaled data
+pcr.fit.nc <- pcr(revenue~.,data=movie_pcr.nc,scale=FALSE,validation="CV")
+
+
+```
+
+
+#### Validation
+
+Non-centered version
+
+```{r Q59, include = T}
+
+validationplot(pcr.fit.nc,val.type="MSEP", legend="topright")
+validationplot(pcr.fit.nc,val.type="R2")
+
+
+```
+
+Centered version
+
+```{r Q60, include = T}
+
+validationplot(pcr.fit,val.type="MSEP", legend="topright") # validation with MSEP & R2
+validationplot(pcr.fit,val.type="R2")
+
+
+```
+
+Both versions agree that 2 components give the optimized MSEP and R2.
+
+We can see the coefficients of different components.
+
+```{r Q61, include = T}
+
+coefplot(pcr.fit, intercept=TRUE) # plot coefficients of different components
+                                  # position 1 is the intercept, the first PC starts at position 2
+
+
+```
+
+We can see that after PC2, the change of coefficients is not significant comparing to the difference between the coeffcients of PC1 and PC2. Hence, we can use PC1 and PC2 to optimize the model since two components are sufficient to capture the variance.
+
+
+
+We can make a comparision between non-centered and centered version.
+
+Non-centered version
+
+```{r Q62, include = T}
+
+# we can see the summary of the model
+summary(pcr.fit.nc)
+
+```
+
+```{r Q63, include = T}
+
+summary(pcr.fit)
+
+
+
+```
+
+
+Scaled data have better variance explanation for revenue than non-scaled data.
+
+#### Prediction
+
+Let's try the pcr model on testing data. We will use the centered version.
+
+```{r Q64}
+
+variance.pcr = c(1:5) # create a vector to store the variances for different numbers of components
+
+for (i in 1:5) {
+  pcr_pred <- predict(pcr.fit, movie_pcr_test , ncomp = i); # predicting the PCR model on the testing set
+  
+  # calculate the variance by returning the mean of  [predicted value - mean(actual values)] ^2
+  variance.pcr[i] = mean((pcr_pred - mean(movie_pcr_test$revenue))^2) 
+  # calculate the variance by taking mean of( (predicted value - mean(actual values) ^2 )
+}
+
+var.pcr.df = as.data.frame(cbind(variance=variance.pcr, components = c(1:5)))
+
+#pred_act <- data.frame(cbind(pcr_pred, movie_pcr_test$revenue))
+
+
+ggplot(data=var.pcr.df) +
+  geom_line(aes(x = components, y = variance)) +
+  geom_point(aes(x = components, y = variance)) +
+  theme_light()
+
+```
+
+
+There is a significant increase in the variance from PC1 to PC2, after that the change of variance is not too drastic. We can say that 2 principal components can capture the majority of variance in the testing data.
+Our PCR model seems to perform properly in the testing data.
+
+
+
+### Linear Model
+
+We can use principal components as the predictors for a linear model. We will use two components to build the models with two versions: centered and non-centered.
+
+Non-centered version
+
+```{r Q65, include = T}
+
+
+
+pcr_lm5 <- lm(revenue ~ PC1 + PC2 , data = movie_pcr.nc) # linear model with PC1 and PC2
+summary(pcr_lm5)
+vif(pcr_lm5)
+
+```
+
+
+Centered version
+
+```{r Q66, include = T}
+
+pcr_lm4 <- lm(revenue ~ PC1 + PC2 , data = movie_pcr)
+summary(pcr_lm4)
+vif(pcr_lm4)
+
+
+
+```
+
+
+All vifs are 1, nice feature from PCA method.
+
+The scaled version gives better results than non-scaled version. 
+
+We can also use AIC and BIC for validation between non-scaled and scaled versions.
+
+```{r Q67, include = T}
+AIC(object = pcr_lm4)
+BIC(object = pcr_lm4)
+
+AIC(object = pcr_lm5)
+BIC(object = pcr_lm5)
+
+
+#str(movie)
+
+if (require("pls")) {detach("package:pls", unload = T)  # for some reason package "pls" made the corrplot not proper so I detach it after using
+}
+```
+
+Both AIC and BIC agree that the scaled version is better.
+
+```{r testpcr}
+prd_pcr <- predict(pcr_lm4, newdata=movie_pcr_test)
+
+regr.eval(movie_pcr_test$revenue, prd_pcr)
+
+```
+
+## Conclusion
+
+Comparing to the linear model (of numerical variables) in previous chapter, the Adjusted R-squared slightly decreases. The value drops from 71.1% to 68.1%. It is in our expectation since the goal of PCA is to reduce dimensionality. Instead of using 5 variables (budget + popularity + vote + score + runtime + ), we need only 2 variables (PC1 and PC2). We can speed up the computational process while not significantly hurting the performance of the model
+
+
+# Chapter 6. Profitability
+
+In this chapter, we use different kinds of model to predict if a movie earns profit or not (box office revenue > budget -> earn profit). In our data, we use column profitable to record whether a movie earns profit or not; a movie with revenue > budget is labeled as 1, otherwise it is labeled as 0.
+
+We use three models in this section: Logistic Regression, Classification Tree and KNN. 
+
+
+
+## Prior Chi-squared test 
+
+Genres
+
+```{r Q68}
+
+# Prior check the dependence of genres and profitable
+contable1 <- table(movie$genres, movie$profitable)
+chisqres1 = chisq.test(contable1)
+chisqres1
+
+```
+
+
+Company
+
+```{r Q69}
+# Prior check the dependence of company and profitable
+contable2 <- table(movie$company, movie$profitable)
+chisqres2 = chisq.test(contable2)
+chisqres2
+
+```
+
+Season
+
+```{r Q70}
+# Prior check the dependence of season and profitable
+contable3 <- table(movie$season, movie$profitable)
+chisqres3 = chisq.test(contable3)
+chisqres3
+
+
+```
+
+* Low p-values, there is evidence that profitable is dependent on season, company and genres.
+
+
+## Logitic Regression
+
+In this part we will construct the logit model on the whole dataset.
+
+
+```{r Q71}
+
+# we do some preparation with the data for our logit model
+
+movie_nd <- movie_num # duplicate the dataframe of numerical variables
+
+# append back the other columns
+movie_nd$genres = movie$genres 
+movie_nd$company = movie$company
+movie_nd$season = movie$season
+movie_nd$y = movie$profitable # profitable column (negative profit = 0, positive profit = 1) is saved as y
+
+str(movie_nd)
+
+
+# split the train and test sets with ratio 50:50
+#set.seed(1)
+#movie_sample1 <- sample(2, nrow(movie_scale), replace=TRUE, prob=c(0.50, 0.50))
+
+# create train and test sets
+#train2 <- movie_scale[movie_sample1==1, 1:9]
+#test2 <- movie_scale[movie_sample1==2, 1:9]
+
+
+
+```
+
+
+Budget and revenue are enough to decide the profitable as the profit is calculated as revenue subtracted by budget. Our pre-test with "bestglm" also shows the same result.
+
+```{r Q72, include = T}
+
+loadPkg("bestglm")
+res.bestglm0 <- bestglm(Xy = movie_nd, family = binomial,
+            IC = "AIC",                 # Information criteria for
+            method = "exhaustive")
+#summary(res.bestglm)
+res.bestglm0$BestModels
+
+
+
+```
+
+
+However, since the relationship between (revenue + budget) and profitable is too direct, we should not use them together. 
+
+In reality, we prefer budget rather than revenue to predict profit. A film manager would want to have a prediction of the profit of a movie before its main released date. The information he/she have are the budget, runtime, genres, production company, popularity, vote and score (vote and score can be obtained by a preview screening of a movie, popularity can be generated after advertisement, trailers and some leaks from a movie). Revenue should play a role as the response in the model rather than a predictor.
+
+
+### Model Construction
+
+Let's try the model with budget and other predictors
+
+```{r Q73}
+
+
+# we will use the same train and test sets as in previous chapters
+
+# remove revenue column and use other predictors in train and test sets
+train3 <- movie_nd[movie_sample == 1, 2:10] # revenue column is 1, we do not include it
+test3 <- movie_nd[movie_sample == 2, 2:10]
+
+dim(train3)
+dim(test3)
+
+
+```
+
+ 
+```{r Q74, include = T}
+
+prf_glm <- glm(y ~ ., data = train3, family = "binomial")
+summary(prf_glm)
+
+
+```
+
+
+```{r Q75}
+exp(coef(prf_glm))[24:28] # company
+exp(coef(prf_glm))[7:23] # genres
+exp(coef(prf_glm))[29:31] # seasons
+
+#length(coef(prf_glm))
+
+```
+
+We can test the effects of different genres/companies/seasons on the prediction to see whether they are significant.
+
+* Genres
+
+```{r Q76, include = T}
+
+loadPkg("aod")  # Analysis of Overdispersed Data, used wald.test in logit example
+
+wald.test(b = coef(prf_glm), Sigma = vcov(prf_glm), Terms = 7:23)
+
+```
+
+It seems that different genres do not have significant effects on the response in our logit model.
+
+* Company
+
+```{r Q77, include = T}
+
+wald.test(b = coef(prf_glm), Sigma = vcov(prf_glm), Terms = 24:28)
+
+
+```
+The effects of different companies are significant.
+
+* Season
+
+```{r Q78, include = T}
+
+
+wald.test(b = coef(prf_glm), Sigma = vcov(prf_glm), Terms = 29:31)
+
+```
+
+The effects of different seasons are significant, but not as clear as the effects of different companies.
+
+### Feature Selection
+
+```{r Q79, include = T}
+
+#drop revenue
+res.bestglm <- bestglm(Xy = train3, family = binomial,
+            IC = "AIC",                 # Information criteria for
+            method = "exhaustive")
+#summary(res.bestglm)
+res.bestglm$BestModels
+#summary(res.bestglm$BestModels)
+
+
+
+
+```
+
+
+* Best model : budget + score + vote + company + season
+
+### Best Logit Model
+
+Build the best model
+
+```{r Q80, include = T}
+
+prf_glm0 <- glm(y ~  budget + score + vote + company + season, data = train3, family = "binomial")
+summary(prf_glm0)
+
+#AIC(prf_glm0) # we can check AIC and BIC
+#BIC(prf_glm0)
+
+
+```
+
+
+```{r Q81}
+
+exp(coef(prf_glm0))
+
+```
+
+
+
+
+### Model Evaluation
+
+We can validate the model on the testing set with following methods:
+
+#### Hosmer and Lemeshow test 
+
+
+```{r Q82, include = T}
+
+prof_glm_pred = predict(object = prf_glm0, test3, type = c("response")) # predict the model on testing data and return predicted probabilities
+
+
+loadPkg("ResourceSelection") # function hoslem.test( ) for logit model evaluation
+
+# best model
+prf_Hos0 = hoslem.test(test3$y, prof_glm_pred) # Hosmer and Lemeshow test, a chi-squared test
+prf_Hos0
+
+```
+
+Low p-value. Both models seem to be a good fit.
+
+
+#### ROC curve and AUC
+
+```{r Q83, include = T}
+
+
+loadPkg("pROC") 
+
+
+h0 <- roc(test3$y ~ prof_glm_pred) # using the model on testing data and see the ROC curve and AUC
+auc(h0) # area-under-curve prefer 0.8 or higher.
+plot(h0)
+title("ROC curve")
+
+```
+
+The area under the curve is more than 0.80. This test also agrees with the Hosmer and Lemeshow test.
+
+#### McFadden
+
+```{r Q84, include = T}
+loadPkg("pscl") # use pR2( ) function to calculate McFadden statistics for model eval
+prf_mcFadden = pR2(prf_glm0)
+prf_mcFadden
+
+```
+
+23.9% the variance in y is explained by the predictors in our model. Not so bad but not so good.
+
+#### Confusion Matrix
+
+
+```{r Q85, include = T}
+#confusion matrix
+loadPkg("caret")
+
+logit_accuracy <- c(1:5)
+logit_kappa <- c(1:5)
+threshold_logit <- c(0.5, 0.6, 0.7, 0.8, 0.9) # set threshold for predicted probabilities
+j = 1
+
+for (i in c(0.5, 0.6, 0.7, 0.8, 0.9)) {
+conf_matrix <- confusionMatrix(data = as.factor(as.integer(prof_glm_pred>i)), reference = test3$y); # using the model on the testing data
+logit_accuracy[j] <- conf_matrix$overall[1]*100;
+logit_kappa[j] <- conf_matrix$overall[2]
+j = j+1
+}
+
+# we can see the results at threshold = 0.9 as an example
+confusionMatrix(data = as.factor(as.integer(prof_glm_pred>0.54)), reference = test3$y)
+```
+
+
+```{r Q86, include = T}
+
+# combine results into a dataframe
+
+logit_prediction <- as.data.frame(cbind(threshold = threshold_logit, accuracy = logit_accuracy, kappa = logit_kappa))
+logit_prediction 
+
+```
+
+## Classification Tree
+
+
+### Model Construction
+
+```{r Q87}
+
+loadPkg("ISLR")
+loadPkg("tree")
+loadPkg("rpart")
+loadPkg("rpart.plot")
+loadPkg("rattle") # For fancyRpartPlot (Trees) Answer "no" on installing from binary source
+
+# we use the same training and testing data so that we can compare Classification Tree to Logit Regression
+prf_dt <- rpart(y~., method = "class", data=train3) #rpart to build our tree
+
+summary(prf_dt) # detailed summary of splits
+prf_dt$variable.importance#variable importance
+#printcp(prf_dt) # display the results 
+```
+
+
+
+We can visualize our tree
+
+```{r Q88, include = T}
+
+# plot tree 
+prp(prf_dt, main = "Classification Trees for Profit Status")
+
+
+#rpart.plot(prf_dt,main = "Classification Trees for Profit Status")
+fancyRpartPlot(prf_dt)
+
+```
+
+### Pruned Tree model
+
+
+We can optimize our tree by pruning (in complex model, pruning helps to reduce overfitting).
+
+```{r Q90, include = T}
+
+printcp(prf_dt) # display the results 
+plotcp(prf_dt) # visualize cross-validation results 
+
+
+```
+
+Relative error is lowest at CP = 5, numbers of split = 8.
+
+Let's see our tree after pruning.
+
+```{r Q91, include = T}
+
+ prf_dt_prune <- prune(prf_dt, cp = prf_dt$cptable[which.min(prf_dt$cptable[,"xerror"]),"CP"]) # prune trees at cp where xerror is minimum
+ #prf_dt_prune <- prune(prf_dt, cp = prf_dt$cptable[4,"CP"])
+# plot tree 
+prp(prf_dt_prune, main = "Classification Trees for Profit Status")
+
+
+#rpart.plot(prf_dt_prune,main = "Classification Trees for Profit Status")
+fancyRpartPlot(prf_dt_prune, main = "Classification Trees for Profit Status")
+
+
+```
+
+The last split was pruned.
+
+
+### Model Evaluation
+
+#### Accuraccy
+
+```{r Q92, include = T}
+
+prf_dt.pred <- predict(prf_dt_prune, test3, type = "class" ) # predict the model on the testing data
+
+
+table_dt <- table(actual = test3$y, predicted = prf_dt.pred) # create a confusion matrix of predicted and actual values
+table_dt
+
+# Accuracy Calculation
+sum(diag(table_dt))/sum(table_dt) # sum(true positive + false negative)/ total 
+confusionMatrix(reference = test3$y, data = prf_dt.pred) 
+#length(prf_dt.pred)
+
+```
+
+
+#### ROC curve and AUC
+
+```{r Q93, include = T}
+
+
+# I see the method to plot ROC for classification tree in youtube and stackoverflow
+# There is an option: type = "prob" when predict rpart object, it return predicted probabilities by the classification tree
+# I then realize that the values with predicted probabilites > 0.5 are the values predicted as 1 in the above method (chunk Q92)
+# I create the another confusion matrix for this part and set threshold = 0.5 and see that the confusion matrices are also similar
+
+
+# prediction using type = "prob"
+prf_dt.pred1 <- predict(prf_dt_prune, test3, type = "prob" ) 
+
+
+
+#prf_dt.conf <- confusionMatrix(data = as.factor(as.integer(prf_dt.pred1[,2]>0.5)), reference = test3$y) 
+# the accuracy will be the same as the accuracy we calculate when setting type=class, we can see the results to check it
+#prf_dt.conf # the accuracy is also 80.5% and the confusion matrix is the same too
+
+#plot ROC and see AUC
+h_dt <- roc(test3$y ~ prf_dt.pred1[,2])
+auc(h_dt)
+plot(h_dt)
+
+
+```
+
+
+The area under the curve is 0.764 (smaller than 0.8). Classification tree seems not be as good as Logistic Regression in this case.
+
+## KNN 
+```{r chooseKfunction}
+
+chooseK = function(k, train_set, val_set, train_class, val_class){
+  
+  # Build knn with k neighbors considered.
+
+  class_knn = knn(train = train_set,    #<- training set cases
+                  test = val_set,       #<- test set cases
+                  cl = train_class,     #<- category for classification
+                  k = k,                #<- number of neighbors considered
+                 use.all = TRUE)       #<- control ties between class assignments
+                                        #   If true, all distances equal to the kth 
+                                        #   largest are included
+  
+  tab = table(class_knn, val_class)
+  
+  # Calculate the accuracy.
+  accu = sum(tab[row(tab) == col(tab)]) / sum(tab)                         
+  cbind(k = k, accuracy = accu)
+}
+
+
+```
+
+
+```{r knnprofit}
+loadPkg("class")
+
+#test3
+#train3
+loadPkg("gmodels")
+knn_profit <- knn(train = train3[c(1:5)], test = test3[c(1:5)], cl=train3$y, k=3)
+CrossTable( knn_profit,test3$y, prop.chisq = FALSE) 
+
+```
+
+
+
+```{r plotkknn}
+
+
+knn_k_profit = sapply(seq(1, 21, by = 2),  #<- set k to be odd number from 1 to 21
+                         function(x) chooseK(x, 
+                                             train_set = train3[c(1:5)],
+                                             val_set = test3[c(1:5)],
+                                             train_class = train3$y,
+                                             val_class = test3$y))
+# Reformat the results to graph the results.
+#str(knn_different_k)
+knn_k_profit = data.frame(k = knn_k_profit[1,],
+                             accuracy = knn_k_profit[2,])
+
+# Plot accuracy vs. k.
+
+ggplot(knn_k_profit,
+       aes(x = k, y = accuracy)) +
+  geom_line(color = "orange", size = 1.5) +
+  geom_point(size = 3) +
+  theme_bw()
+  #theme(plot.title = element_text(hjust=0.5, size = 15, face = "bold.italic"))
+
+
+```
+
+```{r bestknn}
+
+knn_profit <- knn(train = train3[c(1:5)], test = test3[c(1:5)], cl=train3$y, k=7)
+
+CrossTable( knn_profit,test3$y, prop.chisq = FALSE) 
+confusionMatrix(data=test3$y, reference = knn_profit)
+```
+
+KNN model is the worst among three models: Logit, Classification Tree and KNN.
+
+P/s: We can try with Random Forest Model as well and it would have the best results, but our project is too long so I do not cover RF here.
+
+## Conclusion
+
+In the prediciton of Profitability, Logit Regression has the best prediciton in our case.
+
+
+
+# Chapter 7. KNN Models
+
+We will use KNN model in this part to try for some predictions. (P/s: We will discuss later to see if we should include it in the final summary).
+
+```{r Q94, include = T}
+#loadPkg("class")
+
+# we use the same train and test sets as in the linear model section
+
+#train2 <- as.data.frame(scale(movie_num, center = TRUE, scale = TRUE))
+#train2$genres <- movie[movie_sample==1, 1:14]$genres
+
+#train set
+train2 <- train1_full  # dupicate the train set with all predictors we created above
+train2$revenue <- scale(train2$revenue, center = TRUE, scale = TRUE) # scale the revenue column, other numerical variables were scaled before
+  
+
+                                                                  # numerical colums range from 1:6; 7:9 are our reponses
+# same with test set
+test2 <- test1_full
+test2$revenue <- scale(test2$revenue, center = TRUE, scale = TRUE)
+
+
+str(train2)
+str(test2)
+
+
+```
+
+## Season
+
+```{r Q95, include = T}
+
+set.seed(123) # set seed to make sure the table won't change after we re-run the code
+season_knn <- knn(train = train2[,c(1:6)], test = test2[,c(1:6)], cl=train2$season, k=9)
+
+
+crosstab <- CrossTable(test2$season, season_knn, prop.chisq = FALSE)
+
+```
+
+
+
+
+
+
+```{r Q96, include = T}
+
+set.seed(123)
+knn_season_k = sapply(seq(1, 41, by = 2),  #<- set k to be odd number from 1 to 21
+                         function(x) chooseK(x, 
+                                             train_set = train2[c(1:6)],
+                                             val_set = test2[c(1:6)],
+                                             train_class = train2$season,
+                                             val_class = test2$season))
+
+knn_season_k = data.frame(k = knn_season_k[1,],
+                             accuracy = knn_season_k[2,])
+
+# Plot accuracy vs. k.
+ggplot(knn_season_k,
+       aes(x = k, y = accuracy)) +
+  geom_line(color = "orange", size = 1.5) +
+  geom_point(size = 3)
+
+
+```
+
+k= 35 gives the best accuracy
+
+
+## Genres
+
+There are many genres so we won't show the cross table
+
+```{r Q97, include = T}
+
+set.seed(123)
+knn_genres_k = sapply(seq(1, 41, by = 2),  #<- set k to be odd number from 1 to 21
+                         function(x) chooseK(x, 
+                                             train_set = train2[c(1:6)],
+                                             val_set = test2[c(1:6)],
+                                             train_class = train2$genres,
+                                             val_class = test2$genres))
+
+knn_genres_k = data.frame(k = knn_genres_k[1,],
+                             accuracy = knn_genres_k[2,])
+
+# Plot accuracy vs. k.
+ggplot(knn_genres_k,
+       aes(x = k, y = accuracy)) +
+  geom_line(color = "orange", size = 1.5) +
+  geom_point(size = 3)
+
+
+```
+
+
+
+k = 27 gives the best accuracy
+
+
+## Company
+
+```{r Q98, include = T}
+
+
+set.seed(123)
+company_knn <- knn(train = train2[,c(1:6)], test = test2[,c(1:6)], cl=train2$company, k=9)
+crosstab <- CrossTable(test2$company, company_knn, prop.chisq = FALSE)
+
+```
+
+```{r Q99, include = T}
+
+set.seed(123)
+knn_company_k = sapply(seq(1, 41, by = 2),  #<- set k to be odd number from 1 to 21
+                         function(x) chooseK(x, 
+                                             train_set = train2[c(1:6)],
+                                             val_set = test2[c(1:6)],
+                                             train_class = train2$company,
+                                             val_class = test2$company))
+
+knn_company_k = data.frame(k = knn_company_k[1,],
+                             accuracy = knn_company_k[2,])
+
+# Plot accuracy vs. k.
+ggplot(knn_company_k,
+       aes(x = k, y = accuracy)) +
+  geom_line(color = "orange", size = 1.5) +
+  geom_point(size = 3)
+
+
+```
+
+
+
+k = 23 gives the best accuracy
+
+
+# Chapter 8. Time series
+
+We use time series model in this part. We will try HoltWinters and ARIMA.
+
+```{r Q100}
+
+
+# we will subset our data to get the movies from 1995-2016 since we have consistent data in that range
+# we use time series with frequency = 4 (by quarter)
+
+movie_ts <- subset(movie, (year > 1994)) # subset data after 1994
+movie_ts <- subset(movie_ts, select = c("revenue", "year", "quarter")) # select 3 columns we use for time series
+movie_ts <- movie_ts[order(movie_ts$year),] # order by year
+#unique(movie_ts$year)
+
+
+  
+  
+#str(movie_ts)
+
+loadPkg("dplyr")
+movie_ts = movie_ts %>% group_by(year, quarter) %>% summarise_each(funs(sum)) # calculate the total revenue for each quarter in each year
+movie_ts$quarter <- factor(movie_ts$quarter, levels = c("Q1", "Q2", "Q3", "Q4")) # reorder the factor levels
+movie_ts <- movie_ts[order(movie_ts$year, movie_ts$quarter),] # order by year then by quarter
+#movie_ts
+
+```
+
+
+```{r Q101, include = T}
+# divide the data into 2 sets: training and testing
+
+movie.ts <- ts(movie_ts$revenue, frequency = 4, start = c(1995,1), end = c(2010,4)) # training data from 1995-2010
+
+movie.ts.test <- ts(tail(movie_ts, 23)$revenue, frequency = 4, start = c(2011,1), end = c(2016,3)) # testing data from 2011-2016, used for evaluating our time series model
+
+#movie.ts.test
+
+
+```
+
+
+## Visualization
+
+
+```{r boxplot, include = T}
+
+ggplot(movie_ts, aes(x=quarter, y=revenue, fill = quarter)) + 
+  ggtitle("Revenue distribution by quarter") +
+  geom_boxplot(fill = c("red","dodgerblue","yellow","green"),alpha = 0.8) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) 
+  
+
+
+```
+
+Movies in quarter 2 seems to perform well in box office revenue.
+
+```{r Q102, include = T}
+plot(movie.ts, xlab = "Year", ylab="Revenue")
+
+
+
+```
+
+
+## Trend
+
+```{r Q103, include = T}
+
+movie_dcp <- decompose(movie.ts)
+summary(movie_dcp$seasonal)
+summary(movie_dcp$random)
+plot(movie_dcp)
+
+
+```
+
+## HoltWinters 
+
+```{r Q104}
+
+
+movie.ts.smth <- HoltWinters(movie.ts)
+movie.ts.smth
+movie.ts.smth$SSE
+
+```
+
+
+
+#### Forecasting
+
+```{r Q105, include = T}
+plot(movie.ts.smth)
+
+```
+
+Prediction on the future
+
+```{r Q106, include = T}
+
+
+loadPkg("forecast")
+
+#accuracy(movie_hw) 
+movie_ft <- forecast(movie.ts.smth, h=23)
+plot(movie_ft)
+#sm <- ma(movie.ts, order=4) # 4 quarters moving average
+#lines(sm, col="red") # plot
+
+```
+
+
+#### Prediction
+
+We predict the model on the testing data
+
+```{r Q107, include = T}
+
+
+plot(movie_ft)
+lines(movie.ts.test, col = 'red')
+
+#ggplot(movie_hw)
+legend("topleft",lty=1,bty = "n",col=c("red","blue"),c("actual","predicted"))
+
+```
+
+Better visualization with highcharter
+
+```{r Q108, include = T}
+
+loadPkg("highcharter")
+
+
+hchart(movie_ft) %>% 
+  hc_add_series_ts(movie.ts.test, color = "red", name = "ACTUAL") # plot the predicted and actual values in testing data, and the values in training data
+
+
+# we can have a more detailed plot with only predicted and actual values in testing data
+highchart(type="stock") %>%        # try type = "chart", "stock" for different visualizations
+  hc_chart(type = "line") %>%      # try type = "line", bar", "column" for different visualizations
+  hc_add_series_ts(movie.ts.test,name = "ACTUAL", color = "red" ) %>%   # plot the actual data labeled by red color
+  hc_add_series(name = "PREDICTED", movie_ft, color = "blue" )  %>%     # plot the hw predictions labeled by blue color
+  hc_legend(align = "left", verticalAlign = "top",
+            layout = "vertical", x = 0, y = 100)
+  
+
+
+
+```
+
+Nice prediction since the actual values are all in the 95% confidence interval.
+
+## ARIMA Model
+
+#### Forecasting
+
+```{r Q109, include = T}
+
+movie_arima <- auto.arima(movie.ts) # create arima model
+movie_arima <- forecast(movie_arima, h=23) # see how it forcast
+plot(movie_arima)
+#movie_arima
+
+```
+
+#### Model Evaluation
+
+```{r Q110, include = T}
+
+
+plot(movie_arima)
+lines(movie.ts.test, col = 'red')
+
+legend("topleft",lty=1,bty = "n",col=c("red","blue"),c("actual","predicted"))
+
+
+```
+
+We can also plot nicer with highcharter
+
+```{r Q111, include = T}
+
+
+
+hchart(movie_arima) %>% 
+  hc_add_series_ts(movie.ts.test, color = "red", name = "ACTUAL")  # general graph
+
+
+# more detailed graph, I try different stuffs here
+highchart(type="chart") %>%        # try type = "chart", "stock" for different visualizations
+  hc_chart(type = "column") %>%      # try type = "line", bar", "column" for different visualizations
+  hc_add_series_ts(movie.ts.test,name = "ACTUAL", color = "red" ) %>%   # plot the actual data labeled by red color
+  hc_add_series(name = "PREDICTED", movie_arima, color = "blue" )  %>%     # plot the hw predictions labeled by blue color
+  hc_legend(align = "left", verticalAlign = "top",
+            layout = "vertical", x = 0, y = 100)
+
+
+
+
+
+```
+
+In ARIMA model, some actual values are out of 95% confidence interval.
+
+## ARIMA vs HoltWinter
+
+```{r Q112, include = T}
+
+accuracy(movie_ft, movie.ts.test)
+accuracy(movie_arima, movie.ts.test)
+
+
+```
+
+ARIMA does better on training set but the performances of two models on testing set are not much difference.
+Imo, HoltWinters is better as the actual values are always in the 95 confidence interval. The difference between testing and training sets are lower as well. ARIMA may result in overfitting (low variance on training set but in testing set we have high bias).
