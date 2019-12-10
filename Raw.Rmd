@@ -1000,6 +1000,7 @@ Random Forest has the best performance among three models. There is no potential
 ## Correlation
 
 ```{r, include = T}
+#examine what we have in the dataset movies
 str(movies)
 ```
 
@@ -1010,20 +1011,40 @@ c <- cor(movies_reg)
 corrplot(c, method = "square")
 ```
 
-We get that budget, popularity and vote have relatively strong correlations with profit. While runtime and score have moderate correlation. And the correlation between profit and month is really weak.
+We get that budget, popularity and vote have relatively strong correlations with profit. While runtime and score have moderate correlation. The correlations between profit and the other variables are similar to the result of correlation check for revenue.  
+
+For each company we create a new column under the name of that company and mark 0 or 1 depending on if the movie is of that company. We do the same to 'month' and 'genre' in order to select some columns out when we do feature selection later.  
 
 ```{r OneHotCodingMonth, include = T}
+#create columns for each individual month
 M = factor(movies$month) 
 dummm = as.data.frame(model.matrix(~M)[,-1])
 movie_M = cbind(movie, dummm) 
-movies_c <- subset(movie_M, select = c(profit,M2,M3,M4,M6,M6,M7,M8,M9,M10,M11,M12))
+#get a dataset only with profit and months
+movies_c <- subset(movie_M, select = c(profit,M2,M3,M4,M5,M6,M7,M8,M9,M10,M11,M12))
 
-cc <- cor(movies_c)
-corrplot(cc, method = "square")
-#str(movie_M)
+#plot the rho with spearman
+rho <- list()
+month <- list()
+for (i in 2:12){
+  corr <- cor.test(x=movies_c[,i], y=movies_c$profit,method = 'spearman')
+  rho[[i-1]] <- corr$estimate
+  month[[i-1]] <- i
+}
+plot(month,rho,main = 'spearman')
+
+#plot the rho with pearson
+rho <- list()
+month <- list()
+for (i in 2:12){
+  corr <- cor.test(x=movies_c[,i], y=movies_c$profit,method = 'pearson')
+  rho[[i-1]] <- corr$estimate
+  month[[i-1]] <- i
+}
+plot(month,rho,main = 'pearson')
 ```
 
-* Month is not correlated with profit, but we do observe that month six (June) has relatively positive effect on profit, whereas month nine (september) has relatively negative effect on profit.  
+In general, month is not highly correlated with profit, but from both the plots of the Rhos with method spearman and method pearson, we do observe that month six (June) has relatively positive effect on profit, whereas month nine (september) has relatively negative effect on profit. 
 
 ```{r OneHotCodingCompany,incldeu = T}
 
@@ -1038,13 +1059,35 @@ names(movie_OH)[names(movie_OH) == 'FactoredVariableSony Pictures'] <- 'Sony'
 names(movie_OH)[names(movie_OH) == 'FactoredVariableUniversal Pictures'] <- 'Universal'
 names(movie_OH)[names(movie_OH) == 'FactoredVariableWalt Disney'] <- 'Disney'
 names(movie_OH)[names(movie_OH) == 'FactoredVariableWarner Bros'] <- 'Warner Bro'
-#
+#create a new dataframe with only profit and companies
 movies_cor <- subset(movie_OH, select = c(profit,Paramount,Sony,Universal,Disney,`Warner Bro`))
-c <- cor(movies_cor)
-print(c)
+#c <- cor(movies_cor)
+#print(c)
+
+#plot the rho with spearman
+rho <- list()
+company <- list()
+for (i in 2:6){
+  corr <- cor.test(x=movies_cor[,i], y=movies_cor$profit,method = 'spearman')
+  rho[[i-1]] <- corr$estimate
+  company[[i-1]] <- i
+}
+plot(company,rho,main = 'spearman')
+#axis(1, c('Paramount','Sony','Universal','Disny','Warner Bro'),las=2)
+
+#plot the rho with pearson
+rho <- list()
+company <- list()
+for (i in 2:6){
+  corr <- cor.test(x=movies_cor[,i], y=movies_cor$profit,method = 'pearson')
+  rho[[i-1]] <- corr$estimate
+  company[[i-1]] <- i
+}
+plot(company,rho,main = 'pearson')
 ```
 
-* For each company we create a new column under the name of that company and mark 0 or 1 depending on if the movie is of that company. By the correlations between different companies with profit, we get that they are all dependent with profit.
+
+From the two plots of Rhos about the correlations between different companies and profits, company 'Disney' and 'Universal' have relatively stronger correlation with profit. By the amount of rhos between company and profit, we get that four companies are not correlated with profit too much.
 
 ```{r OneHotCodingGenre,include = T}
 G = factor(movie_OH$genres) 
@@ -1053,13 +1096,12 @@ movie_OH = cbind(movie_OH, dumm)
 #str(movie_OH)
 ```
 
-* For each genre we create a new column under the name of that genre and mark 0 or 1 depending on if the movie is of that genre. By the correlations between different genres with profit, we get that they are all dependent with profit.
-
 ## Linear Regression
 
 ### Initial Model
 
 ```{r linearregression, echo=FALSE}
+#get a subset for linear model and scale the variables
 movie_r <- subset(movies,select = c(profit,budget,popularity,runtime,vote,genres,month,score,company))
 movie_r$budget <- scale(movie_r$budget)
 movie_r$profit <- scale(movie_r$profit)
@@ -1067,39 +1109,28 @@ movie_r$popularity <- scale(movie_r$popularity)
 movie_r$runtime <- scale(movie_r$runtime)
 movie_r$vote <- scale(movie_r$vote)
 movie_r$month <- as.factor(movie_r$month)
-
+#build the model and print out the summary
 p.linear <- lm(profit~.,data=movie_r)
 print(summary(p.linear))
 ```
 
 * The first model call is `r format(summary(p.linear)$call)`.
-* By the result of our initial linear regression model on profit, we get that it is unlikely we will observe a relationship between some of the __predictors__ (like company universal, company disney, genre adventure, genre animation) and the __response__ (profit)
+* By the result of our initial linear regression model on profit, we get that it is unlikely we will observe a relationship between some of the __predictors__ (like some uncommon genres) and the __response__ (profit)
 
 ### Model Selection
 
 ```{r}
+#load the package first
 loadPkg("leaps")
 loadPkg("ISLR")
-#This is essentially best fit 
-
 ```
 
-```{r modelselection}
-reg.best <- regsubsets(profit~. , data = movie_r, nvmax = 14, nbest = 1, method = "backward")
-plot(reg.best, scale = "adjr2", main = "Adjusted R^2")
-plot(reg.best, scale = "r2", main = "R^2")
-# In the "leaps" package, we can use scale=c("bic","Cp","adjr2","r2")
-plot(reg.best, scale = "bic", main = "BIC")
-plot(reg.best, scale = "Cp", main = "Cp")
-summary(reg.best)
-```
-
-```{r Modelselection2}
+```{r Modelselection}
+#using backward elimination to select features and draw plots
 movie_r$month <- as.factor(movie_r$month)
 reg.best <- regsubsets(profit~. , data = movie_r, nvmax = 14, nbest = 1, method = "backward")
 plot(reg.best, scale = "adjr2", main = "Adjusted R^2")
 plot(reg.best, scale = "r2", main = "R^2")
-# In the "leaps" package, we can use scale=c("bic","Cp","adjr2","r2")
 plot(reg.best, scale = "bic", main = "BIC")
 plot(reg.best, scale = "Cp", main = "Cp")
 summary(reg.best)
@@ -1121,18 +1152,20 @@ According to the plots above, we know that predictors (budget, vote, month5, mon
 
 ```{r split, echo = F}
 #str(movie_OH)
+#using the dataframe with each categorical in separate columns and scale it
 movie_OH$budget <- scale(movie_OH$budget)
 movie_OH$profit <- scale(movie_OH$profit)
 movie_OH$popularity <- scale(movie_OH$popularity)
 movie_OH$runtime <- scale(movie_OH$runtime)
 movie_OH$vote <- scale(movie_OH$vote)
-
+#build the new model with less features
 p.linear2 <- lm(profit~budget+vote+M5+M6+M12+GAnimation+GFamily,data=movie_OH)
+#print the result of the linear model
 summary(p.linear2)
 ```
 
-* With r-square equal to 0.591, 59.10% of profit can be explained by the 7 features above, like the movie budget, wheather the movie is release in May, June or Decemenber. The accuracy of the new model is close to the original one. We can reduce the number of variables to 7.
-With the 7 features above, we are likely to achieve the model with similar level of fitness compared to the original linear regression model.
+* With adjusted r-squared value equal to 0.591, 59.10% of profit can be explained by the 7 features above, like the movie budget, wheather the movie is release in May, June or Decemenber. The accuracy of the new model is close to the original one. We can reduce the number of variables to 7.  
+* With the 7 features above, we are likely to achieve the model with similar level of fitness compared to the original linear regression model.
 
 ## Ridge regression
 
@@ -1151,7 +1184,7 @@ xr=model.matrix(profit~.,m_r)[,-1]
 yr=m_r$profit
 loadPkg("glmnet")
 #set the lambdas grid
-lambdas=10^seq(10,-10,by = -.1) # prepare log scale grid for λ values, from 10^10 to 10^-4
+lambdas=10^seq(10,-10,by = -.1) # prepare log scale grid for λ values, from 10^10 to 10^-10
 ridge.mod=glmnet(xr,yr,alpha=0,lambda=lambdas) # build the ridge model.
 #get the dimension of the model
 dim(coef(ridge.mod)) 
@@ -1163,11 +1196,12 @@ fit <- ridge.mod$lambda
 ```
 
 * The glmnet( ) function creates 201 models, with our choice of 201 $\lambda$ values. Each model coefficients are stored in the object we named: ridge.mod  
-* There are 38 coefficients for each model. The 141 $\lambda$ values are chosen from $10^{-4}$ to $10^{10}$, essentially covering the ordinary least square model ($\lambda$ = 0), and the null/constant 
+* There are 38 coefficients for each model. The 201 $\lambda$ values are chosen from $10^{-10}$ to $10^{10}$, essentially covering the ordinary least square model ($\lambda$ = 0), and the null/constant 
 model ($\lambda$ approach infinity).
 
 
 ```{r ridge, echo = F}
+#get the best lambda using cross validation
 cv_fit <- cv.glmnet(xr, yr, alpha = 0, lambda = lambdas)
 plot(cv_fit)
 ```
@@ -1190,42 +1224,7 @@ rsq
 
 * With lambda equal to `r bestlam`, we have the r square to be `r rsq`, which is slightly better than the linear model we have. Since the best lambda value is close to 0, the original linear regression model is not overfit.
 
-```{r, echo = F}
-ridge.mod$lambda[100] # 1.26
-coef(ridge.mod)[,100]
-sqrt(sum(coef(ridge.mod)[-1,100]^2)) # 0.55
-ridge.mod$lambda[100] # 1.26
-coef(ridge.mod)[,100] 
-sqrt(sum(coef(ridge.mod)[-1,200]^2))  # 1.14
-```
-
-
 ## Lasso Regression
-
-#### Split train and test sets
-
-```{r, include = F}
-loadPkg("dplyr")
-set.seed(1)
-train = movie_r %>% sample_frac(0.5)
-test = movie_r %>% setdiff(train)
-
-x_train = model.matrix(profit~., train)[,-1]
-x_test = model.matrix(profit~., test)[,-1]
-
-y_train = train %>% select(profit) %>% unlist() # %>% as.numeric()
-y_test = test %>% select(profit) %>% unlist() # %>% as.numeric()
-```
-
-#### Build the model
-```{r, echo = F}
-lasso.mod=glmnet(x_train,y_train,alpha=1,lambda=lambdas)
-plot(lasso.mod)
-set.seed(1)
-cv.out=cv.glmnet(x_train,y_train,alpha=1)
-plot(cv.out)
-
-```
 
 ```{r, echo = F}
 #mean((lasso.pred-y_test)^2)
@@ -1242,19 +1241,20 @@ Lrsq
 
 lasso_coef = predict(out, type = "coefficients", s = bl)[1:38,] # Display coefficients using λ chosen by CV
 #lasso_coef
-#lasso_coef[lasso_coef!=0]
+lasso_coef[lasso_coef!=0]
 lasso_coef[lasso_coef==0]
 ```
 
-Here, we see that the lowest MSE is when $\lambda$ appro = . It has 31 non-zero coefficients. 
-
+Here, we see that the lowest MSE is when $\lambda$ = `r bl` and the r-squared becomes `r Lrsq`. The lasso regression drops 10 useless variables above and it has 27 non-zero coefficients. 
 
 
 ## Random Forest Regression
+
 ```{r}
 #str(movies_rf)
 # install.packages('caTools')
 library(caTools)
+movies$month <- as.integer(movies$month)
 movie_RF <- subset(movies,select = c(company,genres,month,runtime,budget,popularity,score,vote))
 set.seed(123)
 split = sample.split(movie_RF, SplitRatio = 0.8)
@@ -1267,37 +1267,41 @@ RFR = randomForest(x = movie_RF,
 print(RFR)
 ```
 
-The random forest regression model has the highest r-squared value: 0.639 with 500 trees.
+The random forest regression model has the highest r-squared value: 0.644 with 500 trees. Since month is not significant and it can be treated numerically, we did not change month to factor variable. The model is even better with month in number (we got 0.639 r-squared for month in factor). Also it is easier to do further predictions using the regression model with month in integer.  
 
 ```{r}
 plot(RFR)
 ```
 
-It turns out that 500 hundred trees is enough to build the model.
+It turns out that 500 hundred trees is enough to build a relatively good model.
 
 ```{r prediction}
-#summary(regressor)
-# Predicting a new result with Random Forest Regression
-
-Mulan <- data.frame(company = 'Walt Disney',genres = 'Animation',month = 3, runtime = 100 ,budget = 25000000, popularity = 165.13, score = 9.4,vote = 4566)
-#levels(Mulan$company) <- regressor$forest$xlevels$company
-#levels(Mulan$genre) <- regressor$forest$xlevels$genre
-#Mulan_profit = predict(regressor, Mulan)
-
-
 #Set the populartiy as same as the movie forzen's
 Frozen2a <- data.frame(company = 'Walt Disney',genres = 'Animation',month = 11, runtime = 104 ,budget = 33000000, popularity = 165.13, score = 6.79,vote = 5295)
+#fit the levels of company and genre
 levels(Frozen2a$company) <- RFR$forest$xlevels$company
 levels(Frozen2a$genres) <- RFR$forest$xlevels$genres
 Frozen2_profita = predict(RFR, Frozen2a)
-
-Frozen <- data.frame(company = 'Walt Disney',genres = 'Animation',month = 11, runtime = 104 ,budget = 150000000, popularity = 165.13, score = 7.3,vote = 5295)
-levels(Frozen$company) <- RFR$forest$xlevels$company
-levels(Frozen$genres) <- RFR$forest$xlevels$genres
-Frozen_profit = predict(RFR, Frozen)
-
 ```
 
+To predict the profit calculated by box office revenue minus budget, we take the ongoing FrozenII. With all the variales we have and those we take from its previous movie 'Frozen' like popularity, socre and vote, we get a estimation of the profit of FrozenII to be `r Frozen2_profita` using random forest regresssion.
+
+## Polynomial Regression
+
+```{r poly}
+#build an ultimate linear model with some polynomials
+f.model <- lm(profit ~ poly(popularity,10)+poly(vote,10)+company+month+genres+poly(runtime,2)+poly(budget,3)+poly(score,6), data = movies)
+summary(f.model)
+```
+
+With some polynomials, we achieve a 0.653 adjusted r-squared value. In fact, some of the polynomial variables like poly(score,6) are significant. However, since it takes around 60 features in total, the polynomial regression like this is not preferable at all.  
+
+```{r}
+Ff <- data.frame(company = 'Walt Disney',genres = 'Animation',month = 11, runtime = 104 ,budget = 150000000, popularity = 165.13, score = 7.3,vote = 5295)
+Poly_predict <- predict(f.model,Ff)
+```
+
+With the polynomial regression, the estimated profit of movie FrozenII is `r Poly_predict`.  
 
 # Chapter 5. PCA
 
