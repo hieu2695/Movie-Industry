@@ -1,9 +1,13 @@
 # Topic: Movie Industry
 
+Contributors: Tran Hieu Le, Totyana Hill, Fahim Ishrak, Zhilin Wang
+
+
 Welcome!
+
 This is our final project in Data Science course. In this project, we do data analysis to figure out which are the most important factors to a movie's success. We also construct some models to predict gross box office/revenue and profitability.
 
-[The html file of our summary paper](Summary.html)
+[Our summary paper](Summary.html)
 
 ---
 
@@ -22,6 +26,7 @@ Our goal is to answer the following S.M.A.R.T questions:
 # Data Preprocessing
 
 Our dataset is sourced from [Kaggle website](https://www.kaggle.com/tmdb/tmdb-movie-metadata).
+
 At first, we preprocessed the data using Python to extract information from JSON contents. After that we import the data to R to clean the data and create some new columns which are useful for our analysis such as profit, year, season and quarter. All the variables are updated to their correct formats.
 
 # Data Summary
