@@ -1,9 +1,13 @@
-# Topic: Movie Industry
+# Topic: Movie Box Office Prediction
+
+Contributors: Tran Hieu Le, Totyana Hill, Fahim Ishrak, Zhilin Wang
+
 
 Welcome!
+
 This is our final project in Data Science course. In this project, we do data analysis to figure out which are the most important factors to a movie's success. We also construct some models to predict gross box office/revenue and profitability.
 
-[The html file of our summary paper](Summary.html)
+[Our summary paper](Summary.html)
 
 ---
 
@@ -22,6 +26,7 @@ Our goal is to answer the following S.M.A.R.T questions:
 # Data Preprocessing
 
 Our dataset is sourced from [Kaggle website](https://www.kaggle.com/tmdb/tmdb-movie-metadata).
+
 At first, we preprocessed the data using Python to extract information from JSON contents. After that we import the data to R to clean the data and create some new columns which are useful for our analysis such as profit, year, season and quarter. All the variables are updated to their correct formats.
 
 # Data Summary
@@ -62,7 +67,9 @@ In this section, we study the seasonality and trend in movie gross box office. T
 
 ![Decomposition](Figures/Decomp.png)
 
-We construct HoltWinters model and ARIMA model to predict the revenue. The following two graphs show the predictions of two models.
+We construct HoltWinters model and ARIMA model to predict the revenue. 
+
+The following graphs show the predictions of two models.
 
 ![HW](Figures/HW.png)
 ![ARIMA](Figures/ARIMA.png)
@@ -70,7 +77,7 @@ We construct HoltWinters model and ARIMA model to predict the revenue. The follo
 ARIMA model has better performance on the training set, but in predicting an unseen data the predictions of two models are not significant. From my perspective, I prefer the HoltWinters in this case since the actual values always lie in the 95% confidence intervals of HotlWinters' predicted values. In constrast, ARIMA model has some predictions significant from the actual data.
 
 
-Note: There are graphs with more detailed visualization in our project. Please check html file or Rmd file for them.
+P/s: There are graphs with more detailed visualization in our project. Please check html file or Rmd file for them.
 
 # Conclusion
 
@@ -85,19 +92,19 @@ In summary, we have some suggestions for new movie managers and directors. To ac
 
 # References
 
-https://towardsdatascience.com/
+[https://towardsdatascience.com/](https://towardsdatascience.com/)
 
-https://stats.idre.ucla.edu/r/dae/
+[https://stats.idre.ucla.edu/r/dae/](https://stats.idre.ucla.edu/r/dae/)
 
-https://stackoverflow.com/
+[https://stackoverflow.com/](https://stackoverflow.com/)
 
-https://www.kaggle.com/learn-forum
+[https://www.kaggle.com/learn-forum](https://www.kaggle.com/learn-forum)
 
-https://www.r-bloggers.com/
+[https://www.r-bloggers.com/](https://www.r-bloggers.com/)
 
-https://www.datacamp.com/tracks/r-programming
+[https://www.datacamp.com/tracks/r-programming](https://www.datacamp.com/tracks/r-programming)
 
-https://www.forbes.com/sites/scottmendelson/2019/12/01/box-office-walt-disney-frozen-2-starring-idina-menzel-and-kristen-bell-breaks-thanksgiving-records-and-tops-738-million-worldwide/#2f2c0c956d80
+[https://www.forbes.com/sites/scottmendelson/2019/12/01/box-office-walt-disney-frozen-2-starring-idina-menzel-and-kristen-bell-breaks-thanksgiving-records-and-tops-738-million-worldwide/#2f2c0c956d80](https://www.forbes.com/sites/scottmendelson/2019/12/01/box-office-walt-disney-frozen-2-starring-idina-menzel-and-kristen-bell-breaks-thanksgiving-records-and-tops-738-million-worldwide/#2f2c0c956d80)
 
 
 
