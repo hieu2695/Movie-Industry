@@ -51,14 +51,13 @@ loadPkg("gmodels")
 
 # Chapter 1. Introduction
 
-In recent years, the movie industry has been becoming an important source of entertainment in our modern world. Big studios such as Walt Disney, Universal, Paramount, Warner Bros, and Fox have produced many successful films and achieved impressive gross box office as well as reputation. However, there are also many companies failing in the movie industry, which becomes the main concern of new managers and new directors who want to pursue this career. Therefore, finding the most essential factors contributing to the success of a movie and predicting a movie's box office revenue
-play a key role in the film industry. Being aware of a movie's performance in advance, movie managers can allocate appropriate resources, strategies and adjustments to promote the success of their products.
+In recent years, the movie industry has become an instrumental source of entertainment in our modern world. Top studios such as Walt Disney, Universal, Paramount, Warner Bros, and Fox have produced many successful films and achieved impressive gross box office revenues as well as reputation. However, there are also many companies failing in the movie industry, which becomes the main concern of new managers and directors who want to pursue this career. Therefore, finding the most essential factors contributing to the success of a movie and predicting a movie’s box office revenue play a key role in the film industry. Being aware of a movie’s performance in advance will allow movie managers to allocate appropriate resources, strategies and adjustments to promote the success of their products.
 
-In this project, we analyze the movie dataset and construct different models to predict the revenue and profitability of a movie using variables such as budget, run time, genres, vote and score (which can be obtained from a test screening) ... In addition, we use time series to examine the seasinality and trend of gross box office.
+In this project, we analyze the movie dataset and construct different models to predict the revenue and profitability of a movie using variables such as budget, runtime, genres, vote and score (which can be obtained from a test screening) … In addition, we use time series to examine the seasonality and trend of gross box office.
 
-Our goal is to answer the following SMART questions:
+Our goal is to answer the following S.M.A.R.T questions:
 
-1. Which are the most important factors contributing to a movie's success?
+1. Which are the most important factors contributing to a movie’s success?
 2. Which is the best model to predict the gross box office of a movie?
 3. Is there any seasonal pattern in the total revenue of movies? Which period in a year grants movie industry highest box office?
 
@@ -1094,6 +1093,9 @@ Higher (pseudo) R-squared means that random forest fits the data better than lin
 In summary, random forest is the best model to predict revenue among three models. while decision tree has worst performance.
 
 # Chapter 4. Profit Prediction
+
+In this chapter, we try some stuffs with one hot encoding and apply Lasso and Ridge Regression to predict the profit.
+
 ## 4.1. Correlation
 
 ```{r str1}
@@ -1244,7 +1246,7 @@ res.legend <- subsets(reg.best, statistic="cp", legend = FALSE , main = "Mallow 
 
 ```
 
-According to the plots above, we know that predictors (budget, vote, month5, month6,month12, genre Animation, and genre family) form the best model.
+According to the plots above, we know budget, vote, May, June, December, Animation and Family are the best predictors to construct the model.
 
 ### Other linear models
 
@@ -1612,7 +1614,7 @@ coefplot(pcr.fit, intercept=TRUE) # plot coefficients of different components
 According to the graph, after PC2, the change of coefficients is not significant compared to the difference between the coeffcients of PC1 and PC2. Hence, we can use PC1 and PC2 to build the model since two components are sufficient to capture the variance.
 
 
-### Summary
+### Summary of PCR
 
 Let's see the summary of PCR model and compare the non-centered version to the centered version.
 
