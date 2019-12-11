@@ -7,7 +7,7 @@ Welcome!
 
 This is our final project in Data Science course. In this project, we do data analysis to figure out which are the most important factors to a movie's success. We also construct some models to predict gross box office/revenue and profitability.
 
-[Our summary paper](Summary.html)
+[Our summary paper](https://hieu2695.github.io/Movie-Success-Prediction-Models/Summary.html)
 
 ---
 
