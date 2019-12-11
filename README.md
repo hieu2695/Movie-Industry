@@ -1,4 +1,4 @@
-# Topic: Movie Industry
+# Topic: Movie Box Office Prediction
 
 Contributors: Tran Hieu Le, Totyana Hill, Fahim Ishrak, Zhilin Wang
 
