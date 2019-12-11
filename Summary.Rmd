@@ -1779,7 +1779,7 @@ chisqres3
 Our prior chi-squared test indicates that there is evidence for the dependency of revenue on season, company and genres as all p-values are smaller than 0.05.
 
 
-## 6.2. Logitic Regression
+## 6.2. Logistic Regression
 
 
 
