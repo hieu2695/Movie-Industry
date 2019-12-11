@@ -779,6 +779,7 @@ kable(as.data.frame(cbind(AIC=AIC(object=rev_lm3), BIC=BIC(object=rev_lm3))))
 
 
 Model 2 has lower AIC than Model 1, which indicates that Model 2 is better for predicting the revenue. 
+
 Model 1 has lower BIC than Model 2, which indicates that Model 1 is better as a true function to explain the revenue (BIC prefers simple models).
 
 If we want an explanatory model, the linear model with continuous variables is better. However, in our case, since we need more predictive power, we would prefer the second linear model with both continuous and categorical predictors.
@@ -1402,7 +1403,7 @@ With the polynomial regression, the estimated profit of movie FrozenII is `r Pol
 
 # Chapter 5. PCA
 
-Our goad in this chapter is to examine if Principal Component Analysis method is good at dimensional reduction. In our data, we have 5 continuous variables to predict the revenue. We perform principal component regression directly and see how many components are sufficient for the model.
+Our goal in this chapter is to examine if Principal Component Analysis method is good at dimensional reduction. In our data, we have 5 continuous variables to predict the revenue. We perform principal component regression directly and see how many components are sufficient for the model.
 
 
 ```{r PCA_PCR_xform_fcns}
@@ -1994,7 +1995,7 @@ loadPkg("pROC")
 h0 <- roc(test3$y ~ prof_glm_pred) # using the model on testing data and see the ROC curve and AUC
 #auc(h0) # area-under-curve prefer 0.8 or higher.
 plot(h0)
-title("ROC curve")
+
 
 ```
 
@@ -2002,7 +2003,7 @@ The area under the curve is `r auc(h0)`, which also shows that the model is good
 
 #### McFadden
 
-```{r Q84, include = T}
+```{r Q84}
 loadPkg("pscl") # use pR2( ) function to calculate McFadden statistics for model eval
 prf_mcFadden = pR2(prf_glm0)
 prf_mcFadden
@@ -2066,7 +2067,7 @@ This is the result of accuracies and kappas at different predicted probability's
 
 # combine results into a dataframe
 logit_prediction <- as.data.frame(cbind(threshold = threshold_logit, accuracy = logit_accuracy, kappa = logit_kappa))
-logit_prediction 
+kable(logit_prediction)
 
 ```
 
@@ -2150,7 +2151,7 @@ prf_dt.pred <- predict(prf_dt_prune, test3, type = "class" ) # predict the model
 
 
 #table_dt <- table(actual = test3$y, prediction = prf_dt.pred) # create a confusion matrix of predicted and actual values
-#table_dt
+#kable(table_dt)
 
 prediction = prf_dt.pred
 actual = test3$y
@@ -2200,7 +2201,7 @@ prf_dt.pred1 <- predict(prf_dt_prune, test3, type = "prob" )
 
 #plot ROC and see AUC
 h_dt <- roc(test3$y ~ prf_dt.pred1[,2])
-auc(h_dt)
+#auc(h_dt)
 plot(h_dt)
 
 
@@ -2235,7 +2236,7 @@ chooseK = function(k, train_set, val_set, train_class, val_class){
 
 ```
 
-This is the confusion matrix at k =3.
+This is the confusion matrix at k = 3.
 
 ```{r knnprofit, include=T}
 loadPkg("class")
@@ -2282,10 +2283,11 @@ ggplot(knn_k_profit,
 
 According to the graph, accuracy is the best at k = 7.
 
-```{r bestknn, include=T}
+```{r bestknn, include = T}
 
 knn_profit <- knn(train = train3[c(1:5)], test = test3[c(1:5)], cl=train3$y, k=7)
 
+loadPkg("pander")
 prediction =  knn_profit
 actual = test3$y
 
@@ -2527,7 +2529,7 @@ highchart(type="chart") %>%        # try type = "chart", "stock" for different v
 
 In ARIMA model, some actual values are out of 95% confidence interval.
 
-## ARIMA vs HoltWinter
+## 7.5. ARIMA vs HoltWinter
 
 ### HoltWinter
 
