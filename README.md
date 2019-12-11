@@ -7,7 +7,7 @@ Welcome!
 
 This is our final project in Data Science course. In this project, we do data analysis to figure out which are the most important factors to a movie's success. We also construct some models to predict gross box office/revenue and profitability.
 
-[Our summary paper](https://hieu2695.github.io/Movie-Success-Prediction-Models/Summary.html)
+[Our summary paper](https://hieu2695.github.io/Movie-Industry/Summary.html)
 
 ---
 
@@ -35,15 +35,16 @@ This table is the summary of the continuous variables in the dataset.
 
 ![Summary](Figures/Summary.png)
 
-The high differences between variables indicate that we need to scale the data.
+The high differences between variables indicate that we need to scale the data for accurate prediction. In our project, we will scale all numerical predictors and keep the response revenue unscaled.
 
 # Revenue Prediction
 
 This is the summary of three models Linear Regression, Decision Tree and Random Forest in predicting the revenue of movies.
+We use two metrics for comparison: R-squared (Adjusted/Pseudo) and Root Mean Square Error (RMSE).
 
 ![RevPred](Figures/RevenuePred.png)
 
-Random Forest has the best performance. There is no sign of overfitting or underfitting in three models.
+The results show that Random Forest has the best performance. Besides, there is no sign of overfitting or underfitting in three models.
 
 # Profitability 
 
