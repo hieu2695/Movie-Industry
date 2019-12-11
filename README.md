@@ -7,7 +7,7 @@ Welcome!
 
 This is our final project in Data Science course. In this project, we do data analysis to figure out which are the most important factors to a movie's success. We also construct some models to predict gross box office/revenue and profitability.
 
-[Our summary paper](Summary.html)
+[Our summary paper](https://hieu2695.github.io/Movie-Success-Prediction-Models/Summary.html)
 
 ---
 
@@ -104,7 +104,7 @@ In summary, we have some suggestions for new movie managers and directors. To ac
 
 [https://www.datacamp.com/tracks/r-programming](https://www.datacamp.com/tracks/r-programming)
 
-[https://www.forbes.com/sites/scottmendelson/2019/12/01/box-office-walt-disney-frozen-2-starring-idina-menzel-and-kristen-bell-breaks-thanksgiving-records-and-tops-738-million-worldwide/#2f2c0c956d80](https://www.forbes.com/sites/scottmendelson/2019/12/01/box-office-walt-disney-frozen-2-starring-idina-menzel-and-kristen-bell-breaks-thanksgiving-records-and-tops-738-million-worldwide/#2f2c0c956d80)
+[https://www.forbes.com/](https://www.forbes.com/sites/scottmendelson/2019/12/01/box-office-walt-disney-frozen-2-starring-idina-menzel-and-kristen-bell-breaks-thanksgiving-records-and-tops-738-million-worldwide/#2f2c0c956d80)
 
 
 
