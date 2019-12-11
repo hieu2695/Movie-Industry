@@ -312,14 +312,17 @@ Before going to the main contents, we have an overview of the data.
 ```{r Q13, include = T}
 comp_count = data.frame(table(movie$company)) #count the number of movies by company and save to a dataframe
 
+fil_col = c("darkturquoise", "firebrick1", "deepskyblue3","goldenrod1","deeppink2","yellowgreen")
+
 # plot the number of movies by company using ggplot()
-ggplot(comp_count, aes(x = reorder(Var1, Freq), y = Freq)) +  # order by the number of movies
-  geom_bar(stat = 'identity', fill ='gold', alpha = 0.9) + coord_flip() +
+ggplot(comp_count, aes(x = reorder(Var1, Freq), y = Freq, fill = Var1)) +  # order by the number of movies
+  geom_bar(stat = 'identity', fill = fil_col, alpha = 0.9) + coord_flip() +
   ylab("Number of movies") +
-  xlab("Companies") +
+  xlab("Studios") +
   ggtitle(("Number of movies by companies")) +
   theme_bw() +
-  theme(plot.title = element_text(hjust = 0.5)) 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  guides(fill=guide_legend(title = "Studios"))
 
 ```
 
@@ -330,10 +333,10 @@ ggplot(comp_count, aes(x = reorder(Var1, Freq), y = Freq)) +  # order by the num
 
 # we plot the number of movies by season
 season_count = data.frame(table(movie$season))
-
+fil_col = c("mediumspringgreen","goldenrod1", "indianred1","dodgerblue2")
 
 ggplot(season_count, aes(x = Var1, y = Freq, fill = Var1)) + 
-  geom_bar(stat = 'identity', alpha = 0.9) +
+  geom_bar(stat = 'identity', fill=fil_col, alpha = 0.8) +
   ylab("Number of movies") +
   xlab("Season") +
   ggtitle(("Number of movies by season")) +
@@ -349,14 +352,14 @@ ggplot(season_count, aes(x = Var1, y = Freq, fill = Var1)) +
 # and number of movies by genre
 genres_count = data.frame(table(movie$genres))
 
-
-ggplot(genres_count, aes(x = reorder(Var1, Freq), y = Freq)) + 
-  geom_bar(stat = 'identity', fill = "dodgerblue", alpha = 0.9) + coord_flip() +
+ggplot(genres_count, aes(x = reorder(Var1, Freq), y = Freq, fill = Var1)) + 
+  geom_bar(stat = 'identity', alpha = 0.8) + coord_flip() +
   ylab("Number of movies") +
   xlab("Genre") +
   ggtitle(("Number of movies by genre")) +
   theme_bw() +
-  theme(plot.title = element_text(hjust = 0.5)) 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.position = "none")
 
 ```
 
@@ -392,7 +395,7 @@ movie_num_all <- data.frame(cbind(movie_num,profit=movie$profit)) # this one inc
 
 cordf =  cor(movie_num) # cor matrix
 
-corrplot(cordf) # correlation plot
+corrplot.mixed(cordf) # correlation plot
 
 
 
