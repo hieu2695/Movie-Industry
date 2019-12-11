@@ -92,19 +92,19 @@ In summary, we have some suggestions for new movie managers and directors. To ac
 
 # References
 
-(https://towardsdatascience.com/)
+[https://towardsdatascience.com/](https://towardsdatascience.com/)
 
-(https://stats.idre.ucla.edu/r/dae/)
+[https://stats.idre.ucla.edu/r/dae/](https://stats.idre.ucla.edu/r/dae/)
 
-(https://stackoverflow.com/)
+[https://stackoverflow.com/](https://stackoverflow.com/)
 
-(https://www.kaggle.com/learn-forum)
+[https://www.kaggle.com/learn-forum](https://www.kaggle.com/learn-forum)
 
-(https://www.r-bloggers.com/)
+[https://www.r-bloggers.com/](https://www.r-bloggers.com/)
 
-(https://www.datacamp.com/tracks/r-programming)
+[https://www.datacamp.com/tracks/r-programming](https://www.datacamp.com/tracks/r-programming)
 
-(https://www.forbes.com/sites/scottmendelson/2019/12/01/box-office-walt-disney-frozen-2-starring-idina-menzel-and-kristen-bell-breaks-thanksgiving-records-and-tops-738-million-worldwide/#2f2c0c956d80)
+[https://www.forbes.com/sites/scottmendelson/2019/12/01/box-office-walt-disney-frozen-2-starring-idina-menzel-and-kristen-bell-breaks-thanksgiving-records-and-tops-738-million-worldwide/#2f2c0c956d80](https://www.forbes.com/sites/scottmendelson/2019/12/01/box-office-walt-disney-frozen-2-starring-idina-menzel-and-kristen-bell-breaks-thanksgiving-records-and-tops-738-million-worldwide/#2f2c0c956d80)
 
 
 
