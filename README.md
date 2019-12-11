@@ -67,7 +67,9 @@ In this section, we study the seasonality and trend in movie gross box office. T
 
 ![Decomposition](Figures/Decomp.png)
 
-We construct HoltWinters model and ARIMA model to predict the revenue. The following two graphs show the predictions of two models.
+We construct HoltWinters model and ARIMA model to predict the revenue. 
+
+The following graphs show the predictions of two models.
 
 ![HW](Figures/HW.png)
 ![ARIMA](Figures/ARIMA.png)
@@ -75,7 +77,7 @@ We construct HoltWinters model and ARIMA model to predict the revenue. The follo
 ARIMA model has better performance on the training set, but in predicting an unseen data the predictions of two models are not significant. From my perspective, I prefer the HoltWinters in this case since the actual values always lie in the 95% confidence intervals of HotlWinters' predicted values. In constrast, ARIMA model has some predictions significant from the actual data.
 
 
-Note: There are graphs with more detailed visualization in our project. Please check html file or Rmd file for them.
+P/s: There are graphs with more detailed visualization in our project. Please check html file or Rmd file for them.
 
 # Conclusion
 
